@@ -163,23 +163,24 @@ def setup_devices(config: Dict):
     seed = config['system']['seed']
     het_config = config.get('heterogeneity', {})
     
+    # New interface: config loaded from file, with optional overrides
+    config_file = het_config.get('config_file', None)
+    config_override = het_config.get('overrides', None)
+    
     generator = HeterogeneityGenerator(
         n_devices=n_devices,
-        c_inf_base=het_config.get('c_inf_base', 0.1),
-        c_comm_range=tuple(het_config.get('c_comm_range', [0.05, 0.2])),
+        config_path=config_file,
+        config_override=config_override,
         seed=seed
     )
     
     devices = generator.generate()
     
-    # Assign data sizes
-    # This will be updated after data setup
-    
     stats = generator.get_statistics(devices)
     print(f"\nDevice Statistics:")
     print(f"  Types: {stats['type_distribution']}")
     print(f"  Straggler ratio: {stats['straggler_ratio']:.0%}")
-    print(f"  Avg λ: {stats['lambda_stats']['mean']:.2f}")
+    print(f"  Avg λ: {stats['lambda_stats']['mean']:.3f}")
     
     return devices, generator
 
