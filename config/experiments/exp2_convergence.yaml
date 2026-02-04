@@ -1,0 +1,61 @@
+# Experiment 2: Convergence & Accuracy
+# =====================================
+# Compare convergence of methods on CIFAR-100 + STL-10
+
+name: exp2_convergence
+description: Compare convergence and final accuracy of different methods
+
+# Inherit from default and override
+_base_: ../default.yaml
+
+# Methods to compare
+methods:
+  - PAID-FD
+  - Fixed-eps-0.5
+  - Fixed-eps-1.0
+  - Fixed-eps-5.0
+
+# Override system settings for this experiment
+system:
+  n_devices: 50
+  seed: 42
+
+# Data settings
+data:
+  partition:
+    method: dirichlet
+    alpha: 0.5
+
+# Training
+training:
+  n_rounds: 200
+  eval_every: 5
+
+# Method-specific configs
+method_configs:
+  PAID-FD:
+    gamma: 10.0
+    delta: 0.01
+  
+  Fixed-eps-0.5:
+    epsilon: 0.5
+    participation_rate: 1.0
+  
+  Fixed-eps-1.0:
+    epsilon: 1.0
+    participation_rate: 1.0
+  
+  Fixed-eps-5.0:
+    epsilon: 5.0
+    participation_rate: 1.0
+
+# Output settings
+output:
+  figures:
+    - convergence_curves
+    - final_accuracy_bar
+  metrics:
+    - final_accuracy
+    - best_accuracy
+    - convergence_round_95
+    - total_energy

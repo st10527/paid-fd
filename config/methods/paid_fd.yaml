@@ -1,0 +1,38 @@
+# PAID-FD Method Configuration
+# =============================
+
+name: PAID-FD
+type: federated_distillation
+description: Privacy-Aware Incentive-Driven Federated Distillation
+
+# Stackelberg game parameters
+game:
+  gamma: 10.0           # Server valuation coefficient
+  delta: 0.01           # Search tolerance for bisection/ternary search
+  budget: inf           # Total budget constraint
+
+# Privacy mechanism
+privacy:
+  mechanism: laplace    # 'laplace' or 'gaussian'
+  clip_bound: 5.0       # Clip logits to [-bound, bound]
+  sensitivity: auto     # Auto-compute from clip_bound
+
+# Local training
+training:
+  epochs: 1             # Local epochs per round
+  lr: 0.01              # Local learning rate
+  momentum: 0.9         # SGD momentum
+  weight_decay: 0.0001  # L2 regularization
+  batch_size: 32        # Local batch size
+
+# Knowledge distillation
+distillation:
+  epochs: 5             # Distillation epochs on server
+  lr: 0.001             # Distillation learning rate
+  temperature: 3.0      # Softmax temperature
+  loss: kl_div          # 'kl_div' or 'mse'
+
+# Public data usage
+public_data:
+  samples_per_round: 1000  # Samples to use per round
+  shuffle: false           # Shuffle public data each round
