@@ -115,19 +115,17 @@ data/
 *.tar.gz
 *.zip
 
-# Results (keep structure, ignore contents)
-results/experiments/*/*.json
+# Results - JSON results ARE tracked (small, important)
+# Only ignore large binary files
 results/checkpoints/*.pt
 results/checkpoints/*.pth
 results/checkpoints/*.ckpt
 results/logs/*.log
-results/figures/*.png
-results/figures/*.pdf
 
 # Keep .gitkeep files
 !.gitkeep
 
-# Large model files
+# Large model files (anywhere)
 *.pt
 *.pth
 *.ckpt
