@@ -70,7 +70,7 @@ training:
 # PAID-FD specific
 paid_fd:
   # Stackelberg game
-  gamma: 10.0        # Server valuation coefficient
+  gamma: 50.0        # Server valuation coefficient (higher = more samples & higher ε)
   delta: 0.01        # Search tolerance
   budget: inf        # Budget constraint (inf = no constraint)
   

@@ -133,17 +133,18 @@ class HeterogeneityGenerator:
     }
     
     # Privacy sensitivity distribution
+    # Note: Lower lambda = less privacy-sensitive = willing to provide higher ε
     PRIVACY_CONFIG = {
-        PrivacyLevel.LOW: {"value": 0.1, "ratio": 0.40},
-        PrivacyLevel.MEDIUM: {"value": 0.5, "ratio": 0.40},
-        PrivacyLevel.HIGH: {"value": 1.0, "ratio": 0.20},
+        PrivacyLevel.LOW: {"value": 0.01, "ratio": 0.40},     # Very low sensitivity
+        PrivacyLevel.MEDIUM: {"value": 0.05, "ratio": 0.40},  # Low sensitivity  
+        PrivacyLevel.HIGH: {"value": 0.1, "ratio": 0.20},     # Moderate sensitivity
     }
     
     def __init__(
         self,
         n_devices: int,
-        c_inf_base: float = 0.1,
-        c_comm_range: Tuple[float, float] = (0.05, 0.2),
+        c_inf_base: float = 0.01,      # Lowered for more samples
+        c_comm_range: Tuple[float, float] = (0.005, 0.02),  # Lowered
         distance_range: Tuple[float, float] = (10.0, 100.0),
         seed: int = 42
     ):
