@@ -19,12 +19,20 @@ Usage:
 import argparse
 import yaml
 import sys
+import os
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any, Optional
 
-# Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# Get the project root directory (parent of experiments/)
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+# Add project root to path for imports
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+# Change to project root for relative paths in configs
+os.chdir(PROJECT_ROOT)
 
 import torch
 import numpy as np

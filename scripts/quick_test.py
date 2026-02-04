@@ -4,14 +4,24 @@ Quick test script to verify installation.
 
 Usage:
     python scripts/quick_test.py
+    
+    # Or from anywhere:
+    python /path/to/paid-fd/scripts/quick_test.py
 """
 
 import sys
+import os
 from pathlib import Path
 
-# Add project root to path
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root))
+# Get the project root directory (parent of scripts/)
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+# Add project root to path for imports
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+# Change to project root
+os.chdir(PROJECT_ROOT)
 
 
 def test_core_imports():
