@@ -1,0 +1,172 @@
+# Device Heterogeneity Configuration
+# ===================================
+# 
+# This file defines parameters for simulating heterogeneous edge devices.
+# Parameters should be justified by literature or empirical measurements.
+#
+# References:
+# [1] Device specs: NVIDIA Jetson Nano, Raspberry Pi 4/3 official documentation
+# [2] Energy model: "Energy-Efficient Mobile Edge Computing" - need specific citation
+# [3] Wireless model: Shannon capacity with path loss model
+
+# =============================================================================
+# Device Type Specifications
+# =============================================================================
+# Based on real hardware specifications [1]
+device_types:
+  type_a:  # High-end edge device
+    name: "Jetson Nano"
+    cpu_freq_ghz: 1.5           # Quad-core ARM Cortex-A57
+    memory_mb: 4096
+    compute_capability: 1.0      # Baseline multiplier
+    power_idle_w: 5.0            # Idle power consumption
+    power_peak_w: 10.0           # Peak power consumption
+    ratio: 0.30                  # 30% of devices
+    
+  type_b:  # Mid-range edge device  
+    name: "Raspberry Pi 4"
+    cpu_freq_ghz: 1.2           # Quad-core Cortex-A72
+    memory_mb: 4096
+    compute_capability: 0.8      # 80% of baseline
+    power_idle_w: 3.0
+    power_peak_w: 7.5
+    ratio: 0.40                  # 40% of devices
+    
+  type_c:  # Low-end edge device (straggler)
+    name: "Raspberry Pi 3"
+    cpu_freq_ghz: 0.8           # Quad-core Cortex-A53
+    memory_mb: 1024
+    compute_capability: 0.5      # 50% of baseline
+    power_idle_w: 1.5
+    power_peak_w: 5.0
+    ratio: 0.30                  # 30% of devices
+
+# =============================================================================
+# Energy Model Parameters
+# =============================================================================
+# Based on computation and communication energy models [2]
+#
+# Training energy: E_train = κ × f² × C_train × |D| × epochs
+# Inference energy: E_inf = κ × f² × C_inf × s
+# Communication energy: E_comm = P_tx × (data_bits / rate)
+#
+energy_model:
+  # CPU energy coefficient (J/cycle³) - from CMOS switching energy
+  kappa_cpu: 1.0e-28
+  
+  # Cycles per operation
+  cycles_per_train_sample: 1.0e6    # Training complexity
+  cycles_per_inference: 1.0e4       # Inference complexity
+  
+  # Transmission power (Watts)
+  transmission_power_w: 0.1
+  
+  # Bandwidth (Hz)
+  bandwidth_hz: 1.0e6               # 1 MHz
+
+# =============================================================================
+# Communication Model Parameters  
+# =============================================================================
+# Based on wireless channel model [3]
+#
+# Rate = B × log2(1 + SNR × channel_gain)
+# Path loss model: channel_gain = (distance / d0)^(-path_loss_exponent)
+#
+communication_model:
+  # Reference distance (meters)
+  reference_distance_m: 1.0
+  
+  # Path loss exponent (typical urban: 2.7-3.5)
+  path_loss_exponent: 3.0
+  
+  # Device distance range from server (meters)
+  distance_range_m: [10.0, 100.0]
+  
+  # Noise power (Watts)
+  noise_power_w: 1.0e-10
+  
+  # SNR at reference distance (dB)
+  reference_snr_db: 30.0
+
+# =============================================================================
+# Cost Function Parameters
+# =============================================================================
+# Marginal cost for device utility: c_i = c_inf + c_comm
+#
+# These are NORMALIZED costs used in the Stackelberg game.
+# They represent the per-unit cost of providing one logit sample.
+#
+# The actual values are derived from energy model but scaled for numerical stability.
+# Sensitivity analysis in Exp 5 will validate these choices.
+#
+cost_parameters:
+  # Base inference cost (normalized)
+  # Interpretation: cost of generating one logit on public data
+  c_inf_base: 0.01
+  
+  # Inference cost multipliers per device type
+  c_inf_multipliers:
+    type_a: 0.5    # Fast device, lower cost
+    type_b: 1.0    # Baseline
+    type_c: 2.0    # Slow device, higher cost
+  
+  # Communication cost range (normalized)
+  # Varies based on channel conditions
+  c_comm_range: [0.005, 0.02]
+
+# =============================================================================
+# Privacy Sensitivity Distribution
+# =============================================================================
+# λ_i represents device i's privacy sensitivity (cost per unit of ε)
+#
+# Higher λ → device prefers smaller ε (more noise, better privacy)
+# Lower λ → device willing to use larger ε (less noise, less privacy)
+#
+# Distribution rationale:
+# - Most IoT devices handle non-sensitive data → low λ
+# - Some devices have moderate privacy requirements → medium λ  
+# - Few devices handle sensitive data → high λ
+#
+# These values will be validated through sensitivity analysis (Exp 3, Exp 5)
+#
+privacy_sensitivity:
+  levels:
+    low:
+      value: 0.01
+      ratio: 0.40      # 40% of devices
+      description: "Non-sensitive data (environmental sensors, etc.)"
+      
+    medium:
+      value: 0.05
+      ratio: 0.40      # 40% of devices
+      description: "Moderate sensitivity (activity recognition, etc.)"
+      
+    high:
+      value: 0.10
+      ratio: 0.20      # 20% of devices
+      description: "Sensitive data (health monitoring, etc.)"
+
+# =============================================================================
+# Experimental Variations
+# =============================================================================
+# For sensitivity analysis experiments, these alternative configurations
+# can be loaded to test different parameter regimes.
+#
+sensitivity_analysis:
+  # Exp 3: Privacy-accuracy tradeoff
+  lambda_variations:
+    - name: "low_privacy"
+      multiplier: 0.1    # All λ values × 0.1
+    - name: "baseline"
+      multiplier: 1.0
+    - name: "high_privacy"
+      multiplier: 10.0   # All λ values × 10
+      
+  # Exp 5: Heterogeneity impact
+  cost_variations:
+    - name: "homogeneous"
+      c_inf_multipliers: {type_a: 1.0, type_b: 1.0, type_c: 1.0}
+    - name: "mild_heterogeneity"
+      c_inf_multipliers: {type_a: 0.8, type_b: 1.0, type_c: 1.2}
+    - name: "strong_heterogeneity"
+      c_inf_multipliers: {type_a: 0.5, type_b: 1.0, type_c: 2.0}

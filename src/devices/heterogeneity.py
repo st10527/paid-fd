@@ -6,16 +6,16 @@ Models heterogeneity across:
 2. Privacy sensitivity (λ_i): user-dependent, discrete levels  
 3. Computation cost (c_i^inf): hardware-dependent, device types
 
-Based on real edge device specifications:
-- Type A: NVIDIA Jetson Nano (high-end)
-- Type B: Raspberry Pi 4 4GB (mid-range)
-- Type C: Raspberry Pi 3 (low-end, potential straggler)
+Configuration is loaded from config/devices/heterogeneity.yaml
+All parameters should have literature support or experimental justification.
 """
 
 import numpy as np
+import yaml
 from dataclasses import dataclass, field, asdict
-from typing import List, Tuple, Dict, Optional
+from typing import List, Tuple, Dict, Optional, Any
 from enum import Enum
+from pathlib import Path
 
 
 class DeviceType(Enum):
@@ -27,9 +27,9 @@ class DeviceType(Enum):
 
 class PrivacyLevel(Enum):
     """Privacy sensitivity levels."""
-    LOW = 0.1      # Not privacy-sensitive
-    MEDIUM = 0.5   # Moderately sensitive
-    HIGH = 1.0     # Highly sensitive (e.g., medical data)
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
 
 
 @dataclass
@@ -59,24 +59,24 @@ class DeviceProfile:
     
     # Hardware specs
     cpu_freq: float = 1.0   # GHz
-    memory: int = 2048      # MB
+    memory: int = 4096      # MB
     
-    # Data characteristics
-    data_size: int = 0      # Set by data partitioner
-    data_classes: List[int] = field(default_factory=list)  # Classes present in local data
+    # Data assignment (set after initialization)
+    data_size: int = 0
+    data_classes: List[int] = field(default_factory=list)
     
-    # Wireless parameters
+    # Channel state (can be updated per round)
     distance: float = 50.0  # meters
-    channel_gain: float = 1.0  # Updated per round
+    channel_gain: float = 1.0
     
     @property
     def c_total(self) -> float:
-        """Aggregate marginal cost (for Stackelberg game)."""
-        return self.c_comm + self.c_inf
+        """Total marginal cost c_i = c_inf + c_comm."""
+        return self.c_inf + self.c_comm
     
     @property
     def is_straggler(self) -> bool:
-        """Check if device is a potential straggler."""
+        """Check if device is a potential straggler (Type C)."""
         return self.device_type == DeviceType.TYPE_C
     
     def to_dict(self) -> Dict:
@@ -93,59 +93,94 @@ class DeviceProfile:
         return cls(**d)
 
 
+def load_heterogeneity_config(config_path: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Load heterogeneity configuration from YAML file.
+    
+    Args:
+        config_path: Path to config file. If None, uses default location.
+        
+    Returns:
+        Configuration dictionary
+    """
+    if config_path is None:
+        # Find project root and load default config
+        current = Path(__file__).resolve()
+        project_root = current.parent.parent.parent
+        config_path = project_root / "config" / "devices" / "heterogeneity.yaml"
+    
+    config_path = Path(config_path)
+    
+    if not config_path.exists():
+        print(f"Warning: Config file not found at {config_path}, using defaults")
+        return get_default_config()
+    
+    with open(config_path, 'r') as f:
+        return yaml.safe_load(f)
+
+
+def get_default_config() -> Dict[str, Any]:
+    """Return default configuration if file not found."""
+    return {
+        "device_types": {
+            "type_a": {"cpu_freq_ghz": 1.5, "memory_mb": 4096, "compute_capability": 1.0, "ratio": 0.30},
+            "type_b": {"cpu_freq_ghz": 1.2, "memory_mb": 4096, "compute_capability": 0.8, "ratio": 0.40},
+            "type_c": {"cpu_freq_ghz": 0.8, "memory_mb": 1024, "compute_capability": 0.5, "ratio": 0.30},
+        },
+        "cost_parameters": {
+            "c_inf_base": 0.01,
+            "c_inf_multipliers": {"type_a": 0.5, "type_b": 1.0, "type_c": 2.0},
+            "c_comm_range": [0.005, 0.02],
+        },
+        "privacy_sensitivity": {
+            "levels": {
+                "low": {"value": 0.01, "ratio": 0.40},
+                "medium": {"value": 0.05, "ratio": 0.40},
+                "high": {"value": 0.10, "ratio": 0.20},
+            }
+        },
+        "communication_model": {
+            "distance_range_m": [10.0, 100.0],
+            "path_loss_exponent": 3.0,
+        }
+    }
+
+
 class HeterogeneityGenerator:
     """
     Generates heterogeneous device profiles for simulation.
     
-    Configuration follows the experimental plan:
-    - Device types: 30% Type-A, 40% Type-B, 30% Type-C
-    - Privacy levels: 40% low, 40% medium, 20% high
-    - Communication costs: Uniform in [c_min, c_max]
+    All parameters are loaded from configuration file for:
+    1. Reproducibility
+    2. Easy parameter sweeps for experiments
+    3. Clear documentation of parameter choices
     
     Usage:
+        # Default config
         generator = HeterogeneityGenerator(n_devices=50, seed=42)
+        
+        # Custom config
+        generator = HeterogeneityGenerator(
+            n_devices=50, 
+            config_path="config/devices/custom.yaml",
+            seed=42
+        )
+        
         devices = generator.generate()
     """
     
-    # Device type configurations based on real hardware
-    DEVICE_CONFIGS = {
-        DeviceType.TYPE_A: {
-            "name": "Jetson Nano",
-            "cpu_freq": 1.5,      # GHz (quad-core ARM Cortex-A57)
-            "memory": 4096,       # MB
-            "c_inf_mult": 0.5,    # Relative to baseline
-            "ratio": 0.30,        # 30% of devices
-        },
-        DeviceType.TYPE_B: {
-            "name": "RPi 4 (4GB)",
-            "cpu_freq": 1.2,      # GHz (quad-core Cortex-A72)
-            "memory": 4096,       # MB
-            "c_inf_mult": 1.0,    # Baseline
-            "ratio": 0.40,        # 40% of devices
-        },
-        DeviceType.TYPE_C: {
-            "name": "RPi 3",
-            "cpu_freq": 0.8,      # GHz (quad-core Cortex-A53)
-            "memory": 1024,       # MB
-            "c_inf_mult": 2.0,    # 2x slower
-            "ratio": 0.30,        # 30% of devices
-        }
-    }
-    
-    # Privacy sensitivity distribution
-    # Note: Lower lambda = less privacy-sensitive = willing to provide higher ε
-    PRIVACY_CONFIG = {
-        PrivacyLevel.LOW: {"value": 0.01, "ratio": 0.40},     # Very low sensitivity
-        PrivacyLevel.MEDIUM: {"value": 0.05, "ratio": 0.40},  # Low sensitivity  
-        PrivacyLevel.HIGH: {"value": 0.1, "ratio": 0.20},     # Moderate sensitivity
+    # Mapping from config keys to DeviceType enum
+    TYPE_MAPPING = {
+        "type_a": DeviceType.TYPE_A,
+        "type_b": DeviceType.TYPE_B,
+        "type_c": DeviceType.TYPE_C,
     }
     
     def __init__(
         self,
         n_devices: int,
-        c_inf_base: float = 0.01,      # Lowered for more samples
-        c_comm_range: Tuple[float, float] = (0.005, 0.02),  # Lowered
-        distance_range: Tuple[float, float] = (10.0, 100.0),
+        config_path: Optional[str] = None,
+        config_override: Optional[Dict] = None,
         seed: int = 42
     ):
         """
@@ -153,16 +188,67 @@ class HeterogeneityGenerator:
         
         Args:
             n_devices: Number of devices to generate
-            c_inf_base: Base inference cost coefficient (normalized, ~0.1)
-            c_comm_range: Range for communication cost (normalized)
-            distance_range: Range for device distances (meters)
+            config_path: Path to heterogeneity config YAML
+            config_override: Dict to override specific config values
             seed: Random seed for reproducibility
         """
         self.n_devices = n_devices
-        self.c_inf_base = c_inf_base
-        self.c_comm_range = c_comm_range
-        self.distance_range = distance_range
+        self.seed = seed
         self.rng = np.random.RandomState(seed)
+        
+        # Load configuration
+        self.config = load_heterogeneity_config(config_path)
+        
+        # Apply overrides if provided
+        if config_override:
+            self._apply_overrides(config_override)
+        
+        # Extract commonly used parameters
+        self._parse_config()
+    
+    def _apply_overrides(self, overrides: Dict):
+        """Apply configuration overrides."""
+        def deep_update(base: Dict, updates: Dict):
+            for key, value in updates.items():
+                if key in base and isinstance(base[key], dict) and isinstance(value, dict):
+                    deep_update(base[key], value)
+                else:
+                    base[key] = value
+        deep_update(self.config, overrides)
+    
+    def _parse_config(self):
+        """Parse configuration into usable format."""
+        # Device types
+        self.device_configs = {}
+        for type_key, type_config in self.config["device_types"].items():
+            device_type = self.TYPE_MAPPING[type_key]
+            self.device_configs[device_type] = {
+                "cpu_freq": type_config.get("cpu_freq_ghz", 1.0),
+                "memory": type_config.get("memory_mb", 4096),
+                "compute_capability": type_config.get("compute_capability", 1.0),
+                "ratio": type_config.get("ratio", 0.33),
+            }
+        
+        # Cost parameters
+        cost_config = self.config["cost_parameters"]
+        self.c_inf_base = cost_config["c_inf_base"]
+        self.c_inf_multipliers = {
+            self.TYPE_MAPPING[k]: v 
+            for k, v in cost_config["c_inf_multipliers"].items()
+        }
+        self.c_comm_range = tuple(cost_config["c_comm_range"])
+        
+        # Privacy sensitivity
+        self.privacy_levels = {}
+        for level_key, level_config in self.config["privacy_sensitivity"]["levels"].items():
+            self.privacy_levels[level_key] = {
+                "value": level_config["value"],
+                "ratio": level_config["ratio"],
+            }
+        
+        # Communication model
+        comm_config = self.config.get("communication_model", {})
+        self.distance_range = tuple(comm_config.get("distance_range_m", [10.0, 100.0]))
     
     def generate(self) -> List[DeviceProfile]:
         """
@@ -180,219 +266,166 @@ class HeterogeneityGenerator:
         lambdas = self._assign_privacy_levels()
         
         for i in range(self.n_devices):
-            dtype = device_types[i]
-            config = self.DEVICE_CONFIGS[dtype]
+            device_type = device_types[i]
+            config = self.device_configs[device_type]
             
-            # Communication cost (channel-dependent, continuous)
+            # Compute costs
+            c_inf = self.c_inf_base * self.c_inf_multipliers[device_type]
             c_comm = self.rng.uniform(*self.c_comm_range)
             
-            # Inference cost (hardware-dependent, from config)
-            c_inf = self.c_inf_base * config["c_inf_mult"]
-            
-            # Distance (affects channel gain)
+            # Distance and channel
             distance = self.rng.uniform(*self.distance_range)
+            channel_gain = self._compute_channel_gain(distance)
             
             device = DeviceProfile(
                 device_id=i,
-                device_type=dtype,
+                device_type=device_type,
                 c_comm=c_comm,
                 c_inf=c_inf,
                 lambda_i=lambdas[i],
                 cpu_freq=config["cpu_freq"],
                 memory=config["memory"],
                 distance=distance,
-                channel_gain=self._compute_channel_gain(distance)
+                channel_gain=channel_gain
             )
             devices.append(device)
         
         return devices
     
     def _assign_device_types(self) -> List[DeviceType]:
-        """Assign device types according to specified ratios."""
+        """Assign device types according to configured ratios."""
         types = []
+        ratios = [(dt, cfg["ratio"]) for dt, cfg in self.device_configs.items()]
         
-        for dtype, config in self.DEVICE_CONFIGS.items():
-            count = int(self.n_devices * config["ratio"])
-            types.extend([dtype] * count)
+        for device_type, ratio in ratios:
+            count = int(self.n_devices * ratio)
+            types.extend([device_type] * count)
         
-        # Handle rounding - fill remaining with Type B (most common)
+        # Fill remaining slots with most common type (Type B)
         while len(types) < self.n_devices:
             types.append(DeviceType.TYPE_B)
         
-        # Shuffle to randomize positions
         self.rng.shuffle(types)
         return types[:self.n_devices]
     
     def _assign_privacy_levels(self) -> List[float]:
-        """Assign privacy sensitivities according to specified ratios."""
+        """Assign privacy sensitivity values according to configured ratios."""
         lambdas = []
         
-        for level, config in self.PRIVACY_CONFIG.items():
-            count = int(self.n_devices * config["ratio"])
-            lambdas.extend([config["value"]] * count)
+        for level_key, level_config in self.privacy_levels.items():
+            count = int(self.n_devices * level_config["ratio"])
+            lambdas.extend([level_config["value"]] * count)
         
-        # Handle rounding
+        # Fill remaining with medium level
+        medium_value = self.privacy_levels.get("medium", {"value": 0.05})["value"]
         while len(lambdas) < self.n_devices:
-            lambdas.append(PrivacyLevel.MEDIUM.value)
+            lambdas.append(medium_value)
         
         self.rng.shuffle(lambdas)
         return lambdas[:self.n_devices]
     
-    def _compute_channel_gain(self, distance: float, alpha: float = 3.0) -> float:
+    def _compute_channel_gain(self, distance: float) -> float:
         """
-        Compute path loss based channel gain.
+        Compute channel gain based on distance.
         
-        Args:
-            distance: Distance in meters
-            alpha: Path loss exponent (typically 2-4)
-            
-        Returns:
-            Channel gain (normalized)
+        Uses simplified path loss model: g = (d0/d)^α
+        where d0 is reference distance and α is path loss exponent.
         """
-        # Simple path loss model: g = (d0/d)^alpha
         d0 = 1.0  # Reference distance
-        return (d0 / max(distance, d0)) ** alpha
+        alpha = self.config.get("communication_model", {}).get("path_loss_exponent", 3.0)
+        return (d0 / distance) ** alpha
     
-    def update_channel_gains(
-        self, 
-        devices: List[DeviceProfile],
-        fading: bool = True
-    ) -> List[DeviceProfile]:
+    def update_channel_gains(self, devices: List[DeviceProfile]) -> None:
         """
-        Update channel gains for all devices (call each round).
+        Update channel gains for all devices (simulating channel variation).
         
         Args:
-            devices: List of device profiles
-            fading: Whether to include Rayleigh fading
-            
-        Returns:
-            Updated device profiles
+            devices: List of devices to update
         """
         for device in devices:
+            # Add small random variation (shadowing)
             base_gain = self._compute_channel_gain(device.distance)
-            
-            if fading:
-                # Rayleigh fading: |h|^2 is exponentially distributed
-                fading_gain = self.rng.exponential(1.0)
-                device.channel_gain = base_gain * fading_gain
-            else:
-                device.channel_gain = base_gain
-            
-            # Update communication cost based on channel gain
-            # Lower channel gain -> higher communication cost
-            device.c_comm = self.c_comm_range[0] + (
-                self.c_comm_range[1] - self.c_comm_range[0]
-            ) * (1.0 - min(device.channel_gain, 1.0))
-        
-        return devices
+            shadowing = self.rng.lognormal(0, 0.5)  # Log-normal shadowing
+            device.channel_gain = base_gain * shadowing
     
     def get_statistics(self, devices: List[DeviceProfile]) -> Dict:
         """
-        Compute statistics of the device population.
-        
-        Returns:
-            Dictionary with various statistics
-        """
-        stats = {
-            "n_devices": len(devices),
-            "type_distribution": {},
-            "lambda_stats": {},
-            "c_comm_stats": {},
-            "c_inf_stats": {},
-            "c_total_stats": {},
-            "straggler_ratio": 0.0
-        }
-        
-        # Type distribution
-        for dtype in DeviceType:
-            count = sum(1 for d in devices if d.device_type == dtype)
-            stats["type_distribution"][dtype.value] = count
-        
-        # Lambda statistics
-        lambdas = [d.lambda_i for d in devices]
-        stats["lambda_stats"] = {
-            "mean": float(np.mean(lambdas)),
-            "std": float(np.std(lambdas)),
-            "min": float(np.min(lambdas)),
-            "max": float(np.max(lambdas)),
-            "distribution": {
-                "low": sum(1 for l in lambdas if l <= 0.2),
-                "medium": sum(1 for l in lambdas if 0.2 < l <= 0.7),
-                "high": sum(1 for l in lambdas if l > 0.7)
-            }
-        }
-        
-        # Cost statistics
-        c_comms = [d.c_comm for d in devices]
-        c_infs = [d.c_inf for d in devices]
-        c_totals = [d.c_total for d in devices]
-        
-        for name, values in [("c_comm", c_comms), ("c_inf", c_infs), ("c_total", c_totals)]:
-            stats[f"{name}_stats"] = {
-                "mean": float(np.mean(values)),
-                "std": float(np.std(values)),
-                "min": float(np.min(values)),
-                "max": float(np.max(values))
-            }
-        
-        # Straggler ratio
-        stats["straggler_ratio"] = sum(1 for d in devices if d.is_straggler) / len(devices)
-        
-        return stats
-    
-    def create_custom_distribution(
-        self,
-        type_ratios: Dict[str, float] = None,
-        lambda_ratios: Dict[str, float] = None
-    ) -> List[DeviceProfile]:
-        """
-        Create devices with custom type and privacy distributions.
-        
-        Useful for Exp 5: Heterogeneity Analysis.
+        Compute statistics about the generated devices.
         
         Args:
-            type_ratios: {"type_a": 0.2, "type_b": 0.5, "type_c": 0.3}
-            lambda_ratios: {"low": 0.3, "medium": 0.4, "high": 0.3}
+            devices: List of DeviceProfile
+            
+        Returns:
+            Dictionary with statistics
         """
-        # Temporarily update configs
-        if type_ratios:
-            self.DEVICE_CONFIGS[DeviceType.TYPE_A]["ratio"] = type_ratios.get("type_a", 0.3)
-            self.DEVICE_CONFIGS[DeviceType.TYPE_B]["ratio"] = type_ratios.get("type_b", 0.4)
-            self.DEVICE_CONFIGS[DeviceType.TYPE_C]["ratio"] = type_ratios.get("type_c", 0.3)
+        type_counts = {}
+        for dt in DeviceType:
+            type_counts[dt.value] = sum(1 for d in devices if d.device_type == dt)
         
-        if lambda_ratios:
-            self.PRIVACY_CONFIG[PrivacyLevel.LOW]["ratio"] = lambda_ratios.get("low", 0.4)
-            self.PRIVACY_CONFIG[PrivacyLevel.MEDIUM]["ratio"] = lambda_ratios.get("medium", 0.4)
-            self.PRIVACY_CONFIG[PrivacyLevel.HIGH]["ratio"] = lambda_ratios.get("high", 0.2)
+        lambdas = [d.lambda_i for d in devices]
+        c_totals = [d.c_total for d in devices]
         
-        devices = self.generate()
+        return {
+            "n_devices": len(devices),
+            "type_distribution": type_counts,
+            "straggler_ratio": type_counts.get("rpi3", 0) / len(devices),
+            "lambda_stats": {
+                "min": min(lambdas),
+                "max": max(lambdas),
+                "mean": np.mean(lambdas),
+                "std": np.std(lambdas),
+            },
+            "cost_stats": {
+                "min": min(c_totals),
+                "max": max(c_totals),
+                "mean": np.mean(c_totals),
+            },
+            "config_source": "heterogeneity.yaml"
+        }
+    
+    def get_config_summary(self) -> str:
+        """Return a human-readable summary of the configuration."""
+        lines = [
+            "Heterogeneity Configuration:",
+            f"  Devices: {self.n_devices}",
+            f"  Seed: {self.seed}",
+            "",
+            "  Device Types:",
+        ]
+        for dt, cfg in self.device_configs.items():
+            lines.append(f"    {dt.value}: {cfg['ratio']*100:.0f}%, c_inf_mult={self.c_inf_multipliers[dt]}")
         
-        # Reset to defaults
-        self.DEVICE_CONFIGS[DeviceType.TYPE_A]["ratio"] = 0.30
-        self.DEVICE_CONFIGS[DeviceType.TYPE_B]["ratio"] = 0.40
-        self.DEVICE_CONFIGS[DeviceType.TYPE_C]["ratio"] = 0.30
-        self.PRIVACY_CONFIG[PrivacyLevel.LOW]["ratio"] = 0.40
-        self.PRIVACY_CONFIG[PrivacyLevel.MEDIUM]["ratio"] = 0.40
-        self.PRIVACY_CONFIG[PrivacyLevel.HIGH]["ratio"] = 0.20
+        lines.append("")
+        lines.append("  Privacy Levels:")
+        for level, cfg in self.privacy_levels.items():
+            lines.append(f"    {level}: λ={cfg['value']}, {cfg['ratio']*100:.0f}%")
         
-        return devices
+        lines.append("")
+        lines.append(f"  Cost: c_inf_base={self.c_inf_base}, c_comm_range={self.c_comm_range}")
+        
+        return "\n".join(lines)
 
 
+# Convenience function for backward compatibility
 def create_devices(
     n_devices: int,
-    seed: int = 42,
-    **kwargs
+    config_path: Optional[str] = None,
+    seed: int = 42
 ) -> List[DeviceProfile]:
     """
-    Convenience function to create device profiles.
+    Convenience function to create devices.
     
     Args:
         n_devices: Number of devices
+        config_path: Optional path to config file
         seed: Random seed
-        **kwargs: Additional arguments for HeterogeneityGenerator
         
     Returns:
-        List of DeviceProfile instances
+        List of DeviceProfile
     """
-    generator = HeterogeneityGenerator(n_devices=n_devices, seed=seed, **kwargs)
+    generator = HeterogeneityGenerator(
+        n_devices=n_devices,
+        config_path=config_path,
+        seed=seed
+    )
     return generator.generate()

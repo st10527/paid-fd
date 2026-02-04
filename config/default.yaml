@@ -25,22 +25,15 @@ system:
   seed: 42
   device: auto  # 'cuda', 'cpu', or 'auto'
 
-# Device heterogeneity
+# Device heterogeneity - detailed config in config/devices/heterogeneity.yaml
+# This section can override specific values if needed
 heterogeneity:
-  c_inf_base: 0.1
-  c_comm_range: [0.05, 0.2]
-  
-  # Device type distribution
-  type_ratios:
-    type_a: 0.3   # Jetson Nano (high-end)
-    type_b: 0.4   # RPi 4 (mid-range)
-    type_c: 0.3   # RPi 3 (low-end, straggler)
-  
-  # Privacy sensitivity distribution
-  lambda_ratios:
-    low: 0.4      # λ = 0.1
-    medium: 0.4   # λ = 0.5
-    high: 0.2     # λ = 1.0
+  config_file: config/devices/heterogeneity.yaml
+  # Override specific parameters here if needed for experiments
+  # e.g., for Exp 5 heterogeneity analysis:
+  # overrides:
+  #   cost_parameters:
+  #     c_inf_base: 0.02
 
 # Model configuration
 model:
