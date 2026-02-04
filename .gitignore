@@ -111,7 +111,7 @@ venv.bak/
 Thumbs.db
 
 # Project specific
-data/
+/data/
 *.tar.gz
 *.zip
 
