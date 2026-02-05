@@ -36,7 +36,7 @@ import numpy as np
 
 def run_single_experiment(
     gamma=10.0,
-    distill_lr=0.01,
+    distill_lr=0.05,
     temperature=3.0,
     lambda_multiplier=1.0,
     n_rounds=50,
@@ -44,7 +44,7 @@ def run_single_experiment(
     seed=42,
     use_synthetic=False,
     distill_epochs=10,
-    local_epochs=2,
+    local_epochs=5,
     public_samples=1000
 ):
     """Run a single experiment with given parameters."""
@@ -194,7 +194,7 @@ def sweep_distill_lr(n_rounds=50, use_synthetic=False):
     print("Sweeping: DISTILL_LR (distillation learning rate)")
     print("="*60)
     
-    values = [0.001, 0.005, 0.01, 0.05]
+    values = [0.01, 0.05, 0.1, 0.2]
     results = []
     
     for lr in values:
