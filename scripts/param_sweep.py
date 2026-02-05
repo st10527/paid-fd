@@ -43,9 +43,10 @@ def run_single_experiment(
     n_devices=10,               # Reduced for faster iteration
     seed=42,
     use_synthetic=False,
-    distill_epochs=5,
-    local_epochs=2,
-    public_samples=1000
+    distill_epochs=10,          # Increased from 5
+    local_epochs=5,             # Increased from 2
+    public_samples=1000,
+    local_lr=0.1                # Increased from 0.01
 ):
     """Run a single experiment with given parameters."""
     
@@ -114,6 +115,7 @@ def run_single_experiment(
         distill_lr=distill_lr,
         temperature=temperature,
         local_epochs=local_epochs,
+        local_lr=local_lr,
         distill_epochs=distill_epochs,
         public_samples=public_samples
     )
