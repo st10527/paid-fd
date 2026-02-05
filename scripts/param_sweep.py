@@ -40,7 +40,7 @@ def run_single_experiment(
     temperature=3.0,
     lambda_multiplier=1.0,
     n_rounds=50,
-    n_devices=30,
+    n_devices=20,
     seed=42,
     use_synthetic=False,
     distill_epochs=10,
@@ -126,6 +126,7 @@ def run_single_experiment(
     accuracies = []
     losses = []
     for round_idx in range(n_rounds):
+        print(f"      Round {round_idx+1}/{n_rounds}...", end=" ", flush=True)
         result = method.run_round(
             round_idx=round_idx,
             devices=devices,
