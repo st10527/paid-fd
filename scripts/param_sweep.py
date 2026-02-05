@@ -72,8 +72,8 @@ def run_single_experiment(
         train_targets = train.targets
     else:
         from src.data.datasets import load_cifar100, load_stl10
-        train, test = load_cifar100(data_dir='./data')
-        public = load_stl10(data_dir='./data')
+        train, test = load_cifar100(root='./data')
+        public = load_stl10(root='./data')
         train_targets = train.targets
     
     # Partition data with Dirichlet
