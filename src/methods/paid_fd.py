@@ -32,20 +32,20 @@ class PAIDFDConfig:
     budget: float = float('inf') # Budget constraint
     
     # Training parameters
-    local_epochs: int = 1        # Local training epochs
-    local_lr: float = 0.01       # Local learning rate
+    local_epochs: int = 5        # Local training epochs (was 1)
+    local_lr: float = 0.1       # Local learning rate
     local_momentum: float = 0.9  # SGD momentum
     
     # Distillation parameters
-    distill_epochs: int = 5      # Epochs for server distillation
-    distill_lr: float = 0.001    # Distillation learning rate
+    distill_epochs: int = 10     # Epochs for server distillation (was 5)
+    distill_lr: float = 0.01     # Distillation learning rate (was 0.001)
     temperature: float = 3.0     # Distillation temperature
     
     # Privacy parameters
     clip_bound: float = 5.0      # Logit clipping bound
     
     # Public data
-    public_samples: int = 1000   # Samples from public data per round
+    public_samples: int = 5000   # Samples from public data per round
 
 
 class PAIDFD(FederatedMethod):
@@ -313,8 +313,6 @@ class PAIDFD(FederatedMethod):
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
-                
-                idx += batch_size
                 
                 idx += batch_size
     
