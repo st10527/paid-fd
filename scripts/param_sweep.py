@@ -27,18 +27,18 @@ def run_single_experiment(
     # Dataset
     dataset_name="cifar10",
     n_classes=10,
-    # Game parameters
+    # === YOUR CONTRIBUTION: Game parameters (NEED TUNING) ===
     gamma=10.0,
     lambda_multiplier=0.01,
-    # Training parameters
-    distill_lr=0.01,
-    temperature=3.0,
+    # === Literature-based: Fixed values ===
+    distill_lr=0.01,            # Standard for KD
+    temperature=3.0,            # Hinton 2015: T=2-5
     n_rounds=20,
     n_devices=10,
-    distill_epochs=5,
-    local_epochs=3,
-    local_lr=0.01,
-    public_samples=2000,
+    distill_epochs=10,          # Sufficient for convergence
+    local_epochs=3,             # FedAvg standard
+    local_lr=0.01,              # Standard for CIFAR
+    public_samples=1000,
     # Other
     seed=42,
     use_synthetic=False,

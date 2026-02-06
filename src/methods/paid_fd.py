@@ -25,27 +25,34 @@ from ..models.utils import copy_model
 
 @dataclass
 class PAIDFDConfig:
-    """Configuration for PAID-FD."""
-    # Game parameters
+    """
+    Configuration for PAID-FD.
+    
+    Default values based on literature:
+    - local_epochs/lr: FedAvg (McMahan et al., 2017) typically uses 1-5 epochs, lr=0.01
+    - temperature: Knowledge Distillation (Hinton et al., 2015) suggests T=2-5
+    - distill_lr: Standard Adam default is 0.001, but KD often uses 0.01
+    """
+    # Game parameters (YOUR CONTRIBUTION - need tuning)
     gamma: float = 10.0          # Server valuation coefficient
     delta: float = 0.01          # Search tolerance
     budget: float = float('inf') # Budget constraint
     
-    # Training parameters
-    local_epochs: int = 5        # Local training epochs (was 1)
-    local_lr: float = 0.1       # Local learning rate
-    local_momentum: float = 0.9  # SGD momentum
+    # Local training (Literature: FedAvg, FedProx)
+    local_epochs: int = 3        # FedAvg uses 1-5, we use 3 as middle ground
+    local_lr: float = 0.01       # Standard for SGD on CIFAR
+    local_momentum: float = 0.9  # Standard SGD momentum
     
-    # Distillation parameters
-    distill_epochs: int = 10     # Epochs for server distillation (was 5)
-    distill_lr: float = 0.01     # Distillation learning rate (was 0.001)
-    temperature: float = 3.0     # Distillation temperature
+    # Distillation (Literature: Hinton 2015, FedMD, FedDF)
+    distill_epochs: int = 10     # More epochs helps convergence
+    distill_lr: float = 0.01     # Adam lr for distillation
+    temperature: float = 3.0     # Hinton suggests 2-5, we use 3
     
-    # Privacy parameters
-    clip_bound: float = 5.0      # Logit clipping bound
+    # Privacy (YOUR CONTRIBUTION)
+    clip_bound: float = 5.0      # Logit clipping for LDP
     
     # Public data
-    public_samples: int = 5000   # Samples from public data per round
+    public_samples: int = 1000   # Samples per round
 
 
 class PAIDFD(FederatedMethod):
