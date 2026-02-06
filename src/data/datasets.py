@@ -221,6 +221,100 @@ def load_cifar100(
     return train_data, test_data
 
 
+class CIFAR10Wrapper:
+    """Wrapper for CIFAR-10 dataset (10 classes)."""
+    
+    def __init__(
+        self,
+        root: str = "./data",
+        train: bool = True,
+        download: bool = True,
+        normalize: bool = True
+    ):
+        self.root = root
+        self.train = train
+        
+        if normalize:
+            self.transform = transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
+            ])
+        else:
+            self.transform = transforms.ToTensor()
+        
+        self.dataset = torchvision.datasets.CIFAR10(
+            root=str(self.root),
+            train=train,
+            download=download,
+            transform=self.transform
+        )
+        self.data = self.dataset.data
+        self.targets = np.array(self.dataset.targets)
+    
+    @property
+    def n_samples(self) -> int:
+        return len(self.dataset)
+    
+    @property
+    def n_classes(self) -> int:
+        return 10
+    
+    def __len__(self):
+        return self.n_samples
+    
+    def __getitem__(self, idx):
+        return self.dataset[idx]
+
+
+def load_cifar10(
+    root: str = "./data",
+    download: bool = True,
+    normalize: bool = True
+) -> Tuple[CIFAR10Wrapper, CIFAR10Wrapper]:
+    """
+    Load CIFAR-10 train and test sets.
+    
+    Returns:
+        (train_dataset, test_dataset)
+    """
+    train_data = CIFAR10Wrapper(root, train=True, download=download, normalize=normalize)
+    test_data = CIFAR10Wrapper(root, train=False, download=download, normalize=normalize)
+    
+    print(f"Loaded CIFAR-10:")
+    print(f"  Train: {train_data.n_samples} samples")
+    print(f"  Test: {test_data.n_samples} samples")
+    
+    return train_data, test_data
+
+
+def load_dataset(
+    name: str = "cifar100",
+    root: str = "./data",
+    download: bool = True,
+    normalize: bool = True
+):
+    """
+    Unified dataset loader.
+    
+    Args:
+        name: 'cifar10' or 'cifar100'
+        root: Data directory
+        download: Whether to download
+        normalize: Whether to normalize
+        
+    Returns:
+        (train_dataset, test_dataset, n_classes)
+    """
+    if name.lower() == "cifar10":
+        train, test = load_cifar10(root, download, normalize)
+        return train, test, 10
+    elif name.lower() == "cifar100":
+        train, test = load_cifar100(root, download, normalize)
+        return train, test, 100
+    else:
+        raise ValueError(f"Unknown dataset: {name}. Choose 'cifar10' or 'cifar100'")
+
+
 def load_stl10(
     root: str = "./data",
     split: str = "unlabeled",

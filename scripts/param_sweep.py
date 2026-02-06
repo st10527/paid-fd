@@ -2,20 +2,10 @@
 """
 Parameter Sweep for PAID-FD
 
-This script runs experiments with different parameter combinations
-to find reasonable parameter ranges before running full experiments.
-
-Uses CIFAR-100 (real data) for meaningful results.
-
 Usage:
-    python3 scripts/param_sweep.py --sweep distill_lr --rounds 30
-    python3 scripts/param_sweep.py --sweep gamma --rounds 30
-    python3 scripts/param_sweep.py --sweep temperature --rounds 30
-    python3 scripts/param_sweep.py --sweep lambda --rounds 30
-    python3 scripts/param_sweep.py --sweep all --rounds 30
-    
-    # Quick test with synthetic data (not recommended, only for debugging)
-    python3 scripts/param_sweep.py --sweep distill_lr --rounds 10 --synthetic
+    python3 scripts/param_sweep.py --dataset cifar10 --sweep distill_lr --rounds 20
+    python3 scripts/param_sweep.py --dataset cifar100 --sweep distill_lr --rounds 30
+    python3 scripts/param_sweep.py --dataset cifar10 --sweep all --rounds 20
 """
 
 import argparse
@@ -25,7 +15,6 @@ from pathlib import Path
 from datetime import datetime
 import json
 
-# Setup path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 os.chdir(PROJECT_ROOT)
@@ -35,18 +24,24 @@ import numpy as np
 
 
 def run_single_experiment(
+    # Dataset
+    dataset_name="cifar10",
+    n_classes=10,
+    # Game parameters
     gamma=10.0,
-    distill_lr=0.05,
+    lambda_multiplier=0.01,
+    # Training parameters
+    distill_lr=0.01,
     temperature=3.0,
-    lambda_multiplier=0.01,     # Low lambda = high epsilon = less noise
-    n_rounds=30,
-    n_devices=10,               # Reduced for faster iteration
+    n_rounds=20,
+    n_devices=10,
+    distill_epochs=5,
+    local_epochs=3,
+    local_lr=0.01,
+    public_samples=2000,
+    # Other
     seed=42,
     use_synthetic=False,
-    distill_epochs=10,          # Increased from 5
-    local_epochs=5,             # Increased from 2
-    public_samples=1000,
-    local_lr=0.1                # Increased from 0.01
 ):
     """Run a single experiment with given parameters."""
     
@@ -60,24 +55,24 @@ def run_single_experiment(
     set_seed(seed)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     
-    # Create data - use CIFAR-100 by default
+    # Load data
     if use_synthetic:
         from src.data.datasets import create_synthetic_datasets
         train, test, public = create_synthetic_datasets(
-            n_train=n_devices * 100,
+            n_train=n_devices * 500,
             n_test=1000,
             n_public=2000,
-            n_classes=100,
+            n_classes=n_classes,
             seed=seed
         )
         train_targets = train.targets
     else:
-        from src.data.datasets import load_cifar100, load_stl10
-        train, test = load_cifar100(root='./data')
+        from src.data.datasets import load_dataset, load_stl10
+        train, test, n_classes = load_dataset(dataset_name, root='./data')
         public = load_stl10(root='./data')
         train_targets = train.targets
     
-    # Partition data with Dirichlet
+    # Partition data
     partitioner = DirichletPartitioner(alpha=0.5, n_clients=n_devices, seed=seed)
     client_indices = partitioner.partition(train, train_targets)
     client_loaders = create_client_loaders(train, client_indices, batch_size=32)
@@ -96,19 +91,15 @@ def run_single_experiment(
         }
     }
     
-    gen = HeterogeneityGenerator(
-        n_devices=n_devices, 
-        config_override=config_override,
-        seed=seed
-    )
+    gen = HeterogeneityGenerator(n_devices=n_devices, config_override=config_override, seed=seed)
     devices = gen.generate()
     
     for dev in devices:
         if dev.device_id in client_indices:
             dev.data_size = len(client_indices[dev.device_id])
     
-    # Create model - use ResNet18 for CIFAR
-    model = get_model('resnet18', num_classes=100)
+    # Create model
+    model = get_model('resnet18', num_classes=n_classes)
     
     config = PAIDFDConfig(
         gamma=gamma,
@@ -120,18 +111,19 @@ def run_single_experiment(
         public_samples=public_samples
     )
     
-    method = PAIDFD(model, config, n_classes=100, device=device)
+    method = PAIDFD(model, config, n_classes=n_classes, device=device)
     
-    # Get game result for logging
+    # Get game result
     from src.game.stackelberg import StackelbergSolver
     solver = StackelbergSolver(gamma=gamma)
     game_result = solver.solve(devices)
     print(f"      [eps*={game_result['avg_eps']:.2f}, s*={game_result['avg_s']:.0f}]")
     
-    # Run training with progress display
+    # Run training
     accuracies = []
     losses = []
     print("      ", end="", flush=True)
+    
     for round_idx in range(n_rounds):
         result = method.run_round(
             round_idx=round_idx,
@@ -143,19 +135,17 @@ def run_single_experiment(
         accuracies.append(result.accuracy * 100)
         losses.append(result.loss)
         
-        # Compact progress display
         if (round_idx + 1) % 5 == 0:
             print(f"R{round_idx+1}:{result.accuracy*100:.1f}% ", end="", flush=True)
     
-    print()  # New line after progress
+    print()
     
     return {
         'final_acc': accuracies[-1],
         'best_acc': max(accuracies),
-        'avg_last10': np.mean(accuracies[-10:]) if len(accuracies) >= 10 else np.mean(accuracies),
-        'improvement': np.mean(accuracies[-10:]) - np.mean(accuracies[:10]) if len(accuracies) >= 10 else 0,
+        'avg_last5': np.mean(accuracies[-5:]) if len(accuracies) >= 5 else np.mean(accuracies),
+        'improvement': np.mean(accuracies[-5:]) - np.mean(accuracies[:5]) if len(accuracies) >= 5 else 0,
         'final_loss': losses[-1],
-        'best_loss': min(losses),
         'price': game_result['price'],
         'avg_s': game_result['avg_s'],
         'avg_eps': game_result['avg_eps'],
@@ -165,62 +155,36 @@ def run_single_experiment(
     }
 
 
-def sweep_gamma(n_rounds=30, use_synthetic=False):
-    """Sweep gamma parameter."""
+def sweep_distill_lr(dataset_name, n_classes, n_rounds):
     print("\n" + "="*60)
-    print("Sweeping: GAMMA (server valuation)")
+    print("Sweeping: DISTILL_LR")
     print("="*60)
     
-    values = [5, 10, 20, 50]
-    results = []
-    
-    for gamma in values:
-        print(f"\n>> gamma={gamma}")
-        r = run_single_experiment(gamma=gamma, n_rounds=n_rounds, use_synthetic=use_synthetic)
-        r['gamma'] = gamma
-        results.append(r)
-        print(f"   => Final: {r['final_acc']:.2f}%, Best: {r['best_acc']:.2f}%")
-    
-    print("\n" + "-"*70)
-    print(f"{'Gamma':>8} {'Final':>8} {'Best':>8} {'Improve':>10} {'Price':>8} {'eps*':>8}")
-    print("-"*70)
-    for r in results:
-        print(f"{r['gamma']:>8} {r['final_acc']:>7.2f}% {r['best_acc']:>7.2f}% "
-              f"{r['improvement']:>+9.2f}% {r['price']:>8.3f} {r['avg_eps']:>8.3f}")
-    
-    return results
-
-
-def sweep_distill_lr(n_rounds=30, use_synthetic=False):
-    """Sweep distillation learning rate."""
-    print("\n" + "="*60)
-    print("Sweeping: DISTILL_LR (distillation learning rate)")
-    print("="*60)
-    
-    values = [0.01, 0.05, 0.1, 0.2]
+    values = [0.001, 0.005, 0.01, 0.05]
     results = []
     
     for lr in values:
         print(f"\n>> distill_lr={lr}")
-        r = run_single_experiment(distill_lr=lr, n_rounds=n_rounds, use_synthetic=use_synthetic)
+        r = run_single_experiment(
+            dataset_name=dataset_name, n_classes=n_classes,
+            distill_lr=lr, n_rounds=n_rounds
+        )
         r['distill_lr'] = lr
         results.append(r)
         print(f"   => Final: {r['final_acc']:.2f}%, Best: {r['best_acc']:.2f}%")
     
-    print("\n" + "-"*70)
-    print(f"{'LR':>10} {'Final':>8} {'Best':>8} {'Improve':>10} {'Loss':>10}")
-    print("-"*70)
+    print("\n" + "-"*60)
+    print(f"{'LR':>8} {'Final':>8} {'Best':>8} {'Improve':>10}")
+    print("-"*60)
     for r in results:
-        print(f"{r['distill_lr']:>10} {r['final_acc']:>7.2f}% {r['best_acc']:>7.2f}% "
-              f"{r['improvement']:>+9.2f}% {r['final_loss']:>10.4f}")
+        print(f"{r['distill_lr']:>8} {r['final_acc']:>7.2f}% {r['best_acc']:>7.2f}% {r['improvement']:>+9.2f}%")
     
     return results
 
 
-def sweep_temperature(n_rounds=30, use_synthetic=False):
-    """Sweep distillation temperature."""
+def sweep_temperature(dataset_name, n_classes, n_rounds):
     print("\n" + "="*60)
-    print("Sweeping: TEMPERATURE (distillation temperature)")
+    print("Sweeping: TEMPERATURE")
     print("="*60)
     
     values = [1.0, 2.0, 3.0, 5.0]
@@ -228,106 +192,131 @@ def sweep_temperature(n_rounds=30, use_synthetic=False):
     
     for temp in values:
         print(f"\n>> temperature={temp}")
-        r = run_single_experiment(temperature=temp, n_rounds=n_rounds, use_synthetic=use_synthetic)
+        r = run_single_experiment(
+            dataset_name=dataset_name, n_classes=n_classes,
+            temperature=temp, n_rounds=n_rounds
+        )
         r['temperature'] = temp
         results.append(r)
         print(f"   => Final: {r['final_acc']:.2f}%, Best: {r['best_acc']:.2f}%")
     
-    print("\n" + "-"*70)
-    print(f"{'Temp':>8} {'Final':>8} {'Best':>8} {'Improve':>10} {'Loss':>10}")
-    print("-"*70)
+    print("\n" + "-"*60)
+    print(f"{'Temp':>8} {'Final':>8} {'Best':>8} {'Improve':>10}")
+    print("-"*60)
     for r in results:
-        print(f"{r['temperature']:>8.1f} {r['final_acc']:>7.2f}% {r['best_acc']:>7.2f}% "
-              f"{r['improvement']:>+9.2f}% {r['final_loss']:>10.4f}")
+        print(f"{r['temperature']:>8.1f} {r['final_acc']:>7.2f}% {r['best_acc']:>7.2f}% {r['improvement']:>+9.2f}%")
     
     return results
 
 
-def sweep_lambda(n_rounds=30, use_synthetic=False):
-    """Sweep lambda (privacy sensitivity) multiplier."""
+def sweep_gamma(dataset_name, n_classes, n_rounds):
     print("\n" + "="*60)
-    print("Sweeping: LAMBDA multiplier (privacy sensitivity)")
+    print("Sweeping: GAMMA")
     print("="*60)
-    print("Lower lambda = higher epsilon = less noise = better learning")
+    
+    values = [5, 10, 20, 50]
+    results = []
+    
+    for gamma in values:
+        print(f"\n>> gamma={gamma}")
+        r = run_single_experiment(
+            dataset_name=dataset_name, n_classes=n_classes,
+            gamma=gamma, n_rounds=n_rounds
+        )
+        r['gamma'] = gamma
+        results.append(r)
+        print(f"   => Final: {r['final_acc']:.2f}%, Best: {r['best_acc']:.2f}%, eps*={r['avg_eps']:.2f}")
+    
+    print("\n" + "-"*60)
+    print(f"{'Gamma':>8} {'Final':>8} {'Best':>8} {'eps*':>8} {'s*':>8}")
+    print("-"*60)
+    for r in results:
+        print(f"{r['gamma']:>8} {r['final_acc']:>7.2f}% {r['best_acc']:>7.2f}% {r['avg_eps']:>8.2f} {r['avg_s']:>8.1f}")
+    
+    return results
+
+
+def sweep_lambda(dataset_name, n_classes, n_rounds):
+    print("\n" + "="*60)
+    print("Sweeping: LAMBDA (privacy sensitivity)")
+    print("="*60)
     
     values = [0.001, 0.01, 0.1, 1.0]
     results = []
     
     for mult in values:
-        print(f"\n>> lambda_mult={mult} (lambda range: [{0.01*mult:.4f}, {0.1*mult:.4f}])")
-        r = run_single_experiment(lambda_multiplier=mult, n_rounds=n_rounds, use_synthetic=use_synthetic)
+        print(f"\n>> lambda_mult={mult}")
+        r = run_single_experiment(
+            dataset_name=dataset_name, n_classes=n_classes,
+            lambda_multiplier=mult, n_rounds=n_rounds
+        )
         r['lambda_mult'] = mult
-        r['lambda_range'] = f"[{0.01*mult:.4f}, {0.1*mult:.4f}]"
         results.append(r)
-        print(f"   => Final: {r['final_acc']:.2f}%, Best: {r['best_acc']:.2f}%, eps*={r['avg_eps']:.2f}")
+        print(f"   => Final: {r['final_acc']:.2f}%, eps*={r['avg_eps']:.2f}")
     
-    print("\n" + "-"*70)
-    print(f"{'lambda_mult':>12} {'Final':>8} {'Best':>8} {'eps*':>8} {'s*':>8}")
-    print("-"*70)
+    print("\n" + "-"*60)
+    print(f"{'lambda':>8} {'Final':>8} {'Best':>8} {'eps*':>8} {'s*':>8}")
+    print("-"*60)
     for r in results:
-        print(f"{r['lambda_mult']:>12.3f} {r['final_acc']:>7.2f}% {r['best_acc']:>7.2f}% "
-              f"{r['avg_eps']:>8.3f} {r['avg_s']:>8.1f}")
+        print(f"{r['lambda_mult']:>8.3f} {r['final_acc']:>7.2f}% {r['best_acc']:>7.2f}% {r['avg_eps']:>8.2f} {r['avg_s']:>8.1f}")
     
     return results
 
 
 def main():
     parser = argparse.ArgumentParser(description='Parameter sweep for PAID-FD')
+    parser.add_argument('--dataset', type=str, default='cifar10',
+                       choices=['cifar10', 'cifar100'],
+                       help='Dataset to use (default: cifar10)')
     parser.add_argument('--sweep', type=str, required=True,
-                       choices=['gamma', 'distill_lr', 'temperature', 'lambda', 'all'],
+                       choices=['distill_lr', 'temperature', 'gamma', 'lambda', 'all'],
                        help='Which parameter to sweep')
-    parser.add_argument('--rounds', type=int, default=30,
-                       help='Number of rounds per experiment (default: 30)')
-    parser.add_argument('--synthetic', action='store_true',
-                       help='Use synthetic data (not recommended, only for debugging)')
+    parser.add_argument('--rounds', type=int, default=20,
+                       help='Number of rounds per experiment (default: 20)')
     parser.add_argument('--save', type=str, default=None,
                        help='Save results to JSON file')
     args = parser.parse_args()
     
-    print("="*60)
-    print("PAID-FD Parameter Sweep")
-    print("="*60)
-    print(f"Data: {'Synthetic (DEBUG)' if args.synthetic else 'CIFAR-100 + STL-10'}")
-    print(f"Rounds per experiment: {args.rounds}")
-    print(f"Devices: 10 (lightweight mode)")
-    print(f"Device: {'CUDA' if torch.cuda.is_available() else 'CPU'}")
+    n_classes = 10 if args.dataset == 'cifar10' else 100
     
-    all_results = {}
+    print("="*60)
+    print(f"PAID-FD Parameter Sweep")
+    print("="*60)
+    print(f"Dataset: {args.dataset.upper()} ({n_classes} classes)")
+    print(f"Rounds: {args.rounds}")
+    print(f"Devices: 10")
+    print(f"GPU: {'CUDA' if torch.cuda.is_available() else 'CPU'}")
+    
+    all_results = {'config': {'dataset': args.dataset, 'n_classes': n_classes, 'rounds': args.rounds}}
     
     if args.sweep in ['distill_lr', 'all']:
-        all_results['distill_lr'] = sweep_distill_lr(args.rounds, args.synthetic)
+        all_results['distill_lr'] = sweep_distill_lr(args.dataset, n_classes, args.rounds)
     
     if args.sweep in ['temperature', 'all']:
-        all_results['temperature'] = sweep_temperature(args.rounds, args.synthetic)
+        all_results['temperature'] = sweep_temperature(args.dataset, n_classes, args.rounds)
     
     if args.sweep in ['gamma', 'all']:
-        all_results['gamma'] = sweep_gamma(args.rounds, args.synthetic)
+        all_results['gamma'] = sweep_gamma(args.dataset, n_classes, args.rounds)
     
     if args.sweep in ['lambda', 'all']:
-        all_results['lambda'] = sweep_lambda(args.rounds, args.synthetic)
+        all_results['lambda'] = sweep_lambda(args.dataset, n_classes, args.rounds)
     
-    # Save results
     if args.save:
         with open(args.save, 'w') as f:
             json.dump(all_results, f, indent=2)
         print(f"\nResults saved to: {args.save}")
     
-    # Print summary
+    # Summary
     print("\n" + "="*60)
-    print("SUMMARY - Best parameters:")
+    print("SUMMARY")
     print("="*60)
-    
     for param_name, results in all_results.items():
+        if param_name == 'config':
+            continue
         best = max(results, key=lambda x: x['best_acc'])
-        param_key = {
-            'gamma': 'gamma',
-            'distill_lr': 'distill_lr', 
-            'temperature': 'temperature',
-            'lambda': 'lambda_mult'
-        }[param_name]
-        print(f"  {param_name}: {best[param_key]} (best_acc={best['best_acc']:.2f}%)")
-    
-    print("="*60)
+        key = {'distill_lr': 'distill_lr', 'temperature': 'temperature', 
+               'gamma': 'gamma', 'lambda': 'lambda_mult'}[param_name]
+        print(f"  Best {param_name}: {best[key]} (best_acc={best['best_acc']:.2f}%)")
 
 
 if __name__ == '__main__':
