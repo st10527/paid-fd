@@ -18,7 +18,7 @@ import copy
 
 from .base import FederatedMethod, RoundResult
 from ..game.stackelberg import StackelbergSolver, DeviceDecision
-from ..privacy.ldp import add_noise_to_logics
+from ..privacy.ldp import add_noise_to_logits
 from ..devices.energy import EnergyCalculator
 from ..models.utils import copy_model
 
