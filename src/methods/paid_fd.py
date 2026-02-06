@@ -18,7 +18,7 @@ import copy
 
 from .base import FederatedMethod, RoundResult
 from ..game.stackelberg import StackelbergSolver, DeviceDecision
-from ..privacy.ldp import add_noise_to_logits
+from ..privacy.ldp import add_noise_to_logics
 from ..devices.energy import EnergyCalculator
 from ..models.utils import copy_model
 
@@ -235,33 +235,46 @@ class PAIDFD(FederatedMethod):
         """
         Aggregate logits from multiple devices.
         
-        Uses weighted average based on upload volume (s_i).
+        IMPORTANT: We aggregate in probability space, not logit space.
+        Direct averaging of logits from different models produces garbage
+        because each model's logit scale and semantics differ.
+        
+        Method: 
+        1. Convert each device's logits to probabilities (softmax)
+        2. Weighted average of probabilities
+        3. Return as soft labels (keep as probabilities, not convert back to logits)
         """
         # Find minimum length (in case of different sizes)
         min_len = min(len(l) for l in logits_list)
         
-        # Truncate and stack
-        truncated = [l[:min_len] for l in logits_list]
+        # Truncate and convert to probabilities
+        T = self.config.temperature
+        probs_list = [
+            F.softmax(l[:min_len] / T, dim=1) for l in logits_list
+        ]
         
-        # Weighted average
+        # Weighted average of probabilities
         total_weight = sum(weights)
         normalized_weights = [w / total_weight for w in weights]
         
-        aggregated = sum(
-            w * logits for w, logits in zip(normalized_weights, truncated)
+        aggregated_probs = sum(
+            w * probs for w, probs in zip(normalized_weights, probs_list)
         )
         
-        return aggregated
+        # Return as log-probabilities (more numerically stable for KL divergence)
+        # Add small epsilon to avoid log(0)
+        return torch.log(aggregated_probs + 1e-10)
     
     def _distill_to_server(
         self,
-        target_logits: torch.Tensor,
+        target_log_probs: torch.Tensor,
         public_loader: Any
     ):
         """
         Distill aggregated knowledge to server model.
         
-        Uses KL divergence loss with temperature scaling.
+        Uses KL divergence loss. The target is now log-probabilities
+        from the aggregated ensemble.
         """
         self.server_model.train()
         optimizer = torch.optim.Adam(
@@ -270,8 +283,8 @@ class PAIDFD(FederatedMethod):
         )
         
         T = self.config.temperature
-        target_logits = target_logits.to(self.device)
-        n_target = len(target_logits)
+        target_log_probs = target_log_probs.to(self.device)
+        n_target = len(target_log_probs)
         
         for epoch in range(self.config.distill_epochs):
             idx = 0
@@ -281,21 +294,27 @@ class PAIDFD(FederatedMethod):
                 
                 batch_size = min(len(data), n_target - idx)
                 data = data[:batch_size].to(self.device)
-                teacher_logits = target_logits[idx:idx + batch_size]
+                teacher_log_probs = target_log_probs[idx:idx + batch_size]
                 
                 # Student forward pass
                 student_logits = self.server_model(data)
                 
-                # KL divergence loss with temperature
+                # KL divergence: KL(teacher || student)
+                # teacher is already log-probabilities
+                # Need to convert to probabilities for KL div target
+                teacher_probs = torch.exp(teacher_log_probs)
+                
                 loss = F.kl_div(
                     F.log_softmax(student_logits / T, dim=1),
-                    F.softmax(teacher_logits / T, dim=1),
+                    teacher_probs,  # Already softmax'd with temperature
                     reduction='batchmean'
                 ) * (T * T)
                 
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
+                
+                idx += batch_size
                 
                 idx += batch_size
     
