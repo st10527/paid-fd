@@ -269,8 +269,8 @@ def main():
                        choices=['cifar10', 'cifar100'],
                        help='Dataset to use (default: cifar10)')
     parser.add_argument('--sweep', type=str, required=True,
-                       choices=['distill_lr', 'temperature', 'gamma', 'lambda', 'all'],
-                       help='Which parameter to sweep')
+                       choices=['gamma', 'lambda', 'game_params', 'distill_lr', 'temperature', 'all'],
+                       help='Which parameter to sweep (game_params = gamma + lambda)')
     parser.add_argument('--rounds', type=int, default=20,
                        help='Number of rounds per experiment (default: 20)')
     parser.add_argument('--save', type=str, default=None,
@@ -289,17 +289,17 @@ def main():
     
     all_results = {'config': {'dataset': args.dataset, 'n_classes': n_classes, 'rounds': args.rounds}}
     
+    if args.sweep in ['gamma', 'game_params', 'all']:
+        all_results['gamma'] = sweep_gamma(args.dataset, n_classes, args.rounds)
+    
+    if args.sweep in ['lambda', 'game_params', 'all']:
+        all_results['lambda'] = sweep_lambda(args.dataset, n_classes, args.rounds)
+    
     if args.sweep in ['distill_lr', 'all']:
         all_results['distill_lr'] = sweep_distill_lr(args.dataset, n_classes, args.rounds)
     
     if args.sweep in ['temperature', 'all']:
         all_results['temperature'] = sweep_temperature(args.dataset, n_classes, args.rounds)
-    
-    if args.sweep in ['gamma', 'all']:
-        all_results['gamma'] = sweep_gamma(args.dataset, n_classes, args.rounds)
-    
-    if args.sweep in ['lambda', 'all']:
-        all_results['lambda'] = sweep_lambda(args.dataset, n_classes, args.rounds)
     
     if args.save:
         with open(args.save, 'w') as f:
