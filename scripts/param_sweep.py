@@ -60,7 +60,9 @@ def run_single_experiment(
     # -----------------------------------------------------------
     if dataset_name == 'cifar100':
         print("[TMC] Switching to Safe Mode (CIFAR-100 Only)...")
-        from datasets import load_cifar100_safe_split # 引用剛剛新增的函數
+        
+        # 修改這一行：加上 src.data 前綴
+        from src.data.datasets import load_cifar100_safe_split
         
         # 1. 取得乾淨的三份資料
         private_dataset, public_dataset, test_dataset = load_cifar100_safe_split(root='./data')
