@@ -66,6 +66,17 @@ def run_single_experiment(
         
         # 1. 取得乾淨的三份資料
         private_dataset, public_dataset, test_dataset = load_cifar100_safe_split(root='./data')
+
+        # =======================================================
+        # [關鍵修正] 補上這幾行，把變數名稱對接起來！
+        # =======================================================
+        train = private_dataset   # 讓後面的程式碼找得到 'train'
+        test = test_dataset       # 讓後面的程式碼找得到 'test'
+        
+        # [重要] 提取 targets，因為 private_dataset 是 Subset，結構不太一樣
+        import numpy as np
+        # 從原始完整資料集中，根據 indices 抓出對應的 labels
+        train_targets = np.array(private_dataset.dataset.targets)[private_dataset.indices]
         
         # 2. 建立 Loader
         public_loader = torch.utils.data.DataLoader(public_dataset, batch_size=128, shuffle=True, num_workers=2)
