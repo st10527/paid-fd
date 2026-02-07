@@ -61,29 +61,22 @@ def run_single_experiment(
     if dataset_name == 'cifar100':
         print("[TMC] Switching to Safe Mode (CIFAR-100 Only)...")
         
-        # 修改這一行：加上 src.data 前綴
+        # Import from src.data.datasets (with proper path)
         from src.data.datasets import load_cifar100_safe_split
         
         # 1. 取得乾淨的三份資料
         private_dataset, public_dataset, test_dataset = load_cifar100_safe_split(root='./data')
 
         # =======================================================
-        # [關鍵修正] 補上這幾行，把變數名稱對接起來！
+        # [關鍵修正] Fix UnboundLocalError: assign to variables used outside if/else
         # =======================================================
         train = private_dataset   # 讓後面的程式碼找得到 'train'
         test = test_dataset       # 讓後面的程式碼找得到 'test'
+        public = public_dataset   # 讓後面的程式碼找得到 'public'
         
         # [重要] 提取 targets，因為 private_dataset 是 Subset，結構不太一樣
-        import numpy as np
         # 從原始完整資料集中，根據 indices 抓出對應的 labels
         train_targets = np.array(private_dataset.dataset.targets)[private_dataset.indices]
-        
-        # 2. 建立 Loader
-        public_loader = torch.utils.data.DataLoader(public_dataset, batch_size=128, shuffle=True, num_workers=2)
-        test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=128, shuffle=False, num_workers=2)
-        
-        # 3. 欺騙下游程式：把 private_dataset 偽裝成 train_dataset 傳下去
-        train_dataset = private_dataset
         
         # [重要] 強制設定 n_classes，以免它去讀 STL-10 的設定
         n_classes = 100
@@ -99,8 +92,9 @@ def run_single_experiment(
     client_indices = partitioner.partition(train, train_targets)
     client_loaders = create_client_loaders(train, client_indices, batch_size=32)
     
+    # Create DataLoaders (unified for both branches)
     test_loader = DataLoader(test, batch_size=128, shuffle=False)
-    public_loader = DataLoader(public, batch_size=32, shuffle=True)
+    public_loader = DataLoader(public, batch_size=128, shuffle=True)
     
     # Create devices with lambda multiplier
     config_override = {
