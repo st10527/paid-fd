@@ -375,20 +375,26 @@ def check_full_round():
             print(f"  Device {d.device_id}: s*={d.s_star:.1f}, eps*={d.eps_star:.4f}, q={d.quality:.4f}")
     
     # 噪聲分析
-    print("\n--- Noise Analysis ---")
+    print("\n--- Noise Analysis (v4: Logit Space) ---")
     avg_eps = game_result['avg_eps']
     n_part = game_result['n_participants']
+    C = 5.0  # clip_bound
     
-    # v3 method: noise on aggregate, sensitivity = 2/N
-    effective_sens = 2.0 / n_part
-    noise_scale = effective_sens / avg_eps
+    # v4: noise on aggregate LOGITS
+    sens_per_elem = 2.0 * C / n_part
+    noise_scale = sens_per_elem / avg_eps
+    noise_std = np.sqrt(2) * noise_scale
+    logit_range = 2 * C  # [-5, +5]
+    
     print(f"Avg epsilon: {avg_eps:.4f}")
     print(f"N participants: {n_part}")
-    print(f"Effective sensitivity (2/N): {effective_sens:.4f}")
-    print(f"Noise scale (Laplace): {noise_scale:.6f}")
-    print(f"Avg probability per class (1/100): 0.01")
-    print(f"Noise/Signal ratio: {noise_scale / 0.01:.2f}")
-    print(f"  -> {'OK (noise < signal)' if noise_scale < 0.01 else 'Noisy but averaging helps' if noise_scale < 0.1 else 'Very noisy'}")
+    print(f"Clip bound C: {C}")
+    print(f"Sensitivity per element (2C/N): {sens_per_elem:.4f}")
+    print(f"Noise scale (Laplace): {noise_scale:.4f}")
+    print(f"Noise std: {noise_std:.4f}")
+    print(f"Logit range: {logit_range}")
+    print(f"SNR (logit_range / noise_std): {logit_range / noise_std:.1f}")
+    print(f"  -> {'Good' if logit_range / noise_std > 3 else 'Marginal' if logit_range / noise_std > 1 else 'Too noisy'}")
     
     # 模型
     model = get_model('resnet18', num_classes=100)
@@ -398,7 +404,7 @@ def check_full_round():
         gamma=100.0,
         distill_lr=0.001,
         temperature=3.0,
-        local_epochs=5,
+        local_epochs=20,       # v4: more local training for better teacher
         local_lr=0.1,
         distill_epochs=10,
         public_samples=10000   # v3: use ALL public data

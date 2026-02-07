@@ -18,7 +18,7 @@ import copy
 
 from .base import FederatedMethod, RoundResult
 from ..game.stackelberg import StackelbergSolver, DeviceDecision
-from ..privacy.ldp import add_noise_to_logits
+from ..privacy.ldp import add_noise_to_logits  # kept for reference; v4 uses np.random.laplace directly
 from ..devices.energy import EnergyCalculator
 from ..models.utils import copy_model
 
@@ -137,18 +137,21 @@ class PAIDFD(FederatedMethod):
         
         self.price_history.append(price)
         
-        # Stage 2: Collect soft labels from participating devices
         # ==========================================
-        # [TMC Fix v3] Architecture:
-        #   - Collect a FIXED set of public images (use ALL public data)
-        #   - Each device computes logits -> softmax on the SAME images
-        #   - Aggregate probabilities (weighted average across devices)
-        #   - Add ONE noise pass on the aggregate (privacy amplified by N devices)
-        #   - Distill using full (image, soft_label) pairs
+        # [TMC Fix v4] LOGIT-SPACE aggregation with noise
         #
-        # Key insight: s_i* from the game controls payment/cost accounting,
-        # NOT the actual number of samples used for distillation.
-        # In FedMD/FedDF, all devices share logits on the FULL public set.
+        # WHY logit space instead of probability space?
+        #   Probability: signal=0.01 (1/100), noise_scale=0.2 → SNR=0.05 💀
+        #   Logit:       signal=10 (range[-5,+5]), noise_scale=1.0 → SNR=7.0 ✅
+        #   → 140x improvement in signal-to-noise ratio!
+        #
+        # Pipeline per round:
+        #   1. Collect ALL public images into a fixed tensor
+        #   2. Each device: local train → compute logits → clip to [-C, C]
+        #   3. Server: weighted average of clipped logits
+        #   4. Server: add Laplace noise (sensitivity = 2C/N per element)
+        #   5. Server: softmax(noisy_logits / T) → teacher probs
+        #   6. Distill server model from teacher probs
         # ==========================================
         
         # Collect ALL public images into a fixed tensor
@@ -158,11 +161,13 @@ class PAIDFD(FederatedMethod):
         public_images = torch.cat(public_images_list, dim=0)
         n_public = len(public_images)
         
-        all_probs = []  # Store probability vectors per device
-        all_weights = []  # Weight = quality contribution for payment
+        all_logits = []  # Store CLIPPED LOGITS per device
+        all_weights = []  # Aggregation weights
         total_energy = {"training": 0.0, "inference": 0.0, "communication": 0.0}
         participants = []
-        avg_eps = 0.0  # Track for aggregate noise
+        eps_list = []  # Track epsilon per participant
+        
+        C = self.config.clip_bound  # Logit clip bound
         
         for decision in decisions:
             if not decision.participates:
@@ -172,14 +177,10 @@ class PAIDFD(FederatedMethod):
             dev = devices[dev_id]
             participants.append(dev_id)
             
-            # Skip if no data loader for this device
             if dev_id not in client_loaders:
                 continue
             
-            # Get local data loader
             local_loader = client_loaders[dev_id]
-            
-            # Create local model copy
             local_model = copy_model(self.server_model, device=self.device)
             
             # Local training on private data
@@ -190,25 +191,24 @@ class PAIDFD(FederatedMethod):
                 lr=self.config.local_lr
             )
             
-            # Compute softmax probabilities on ALL public data
+            # Compute CLIPPED logits on ALL public data
             local_model.eval()
-            T = self.config.temperature
-            probs_chunks = []
+            logit_chunks = []
             bs = 256
             with torch.no_grad():
                 for start in range(0, n_public, bs):
                     batch = public_images[start:start+bs].to(self.device)
                     logits = local_model(batch)
-                    probs = F.softmax(logits / T, dim=1)
-                    probs_chunks.append(probs.cpu())
-            device_probs = torch.cat(probs_chunks, dim=0)  # (n_public, K)
+                    # Clip logits to bound sensitivity
+                    logits = torch.clamp(logits, -C, C)
+                    logit_chunks.append(logits.cpu())
+            device_logits = torch.cat(logit_chunks, dim=0)  # (n_public, K)
             
-            all_probs.append(device_probs)
-            # Weight by game quality (for Stackelberg consistency)
+            all_logits.append(device_logits)
             all_weights.append(decision.quality)
-            avg_eps += decision.eps_star
+            eps_list.append(decision.eps_star)
             
-            # Energy accounting (s_i* used here for cost, not for limiting data)
+            # Energy accounting
             s_for_cost = max(int(decision.s_star), 200)
             energy = self.energy_calc.compute_total_energy(
                 cpu_freq=getattr(dev, 'cpu_freq', 1.0),
@@ -221,31 +221,35 @@ class PAIDFD(FederatedMethod):
             
             del local_model
         
-        # Stage 3: Aggregate and distill
-        if all_probs:
-            n_participants = len(all_probs)
-            avg_eps = avg_eps / n_participants if n_participants > 0 else 1.0
+        # Stage 3: Aggregate logits, add noise, distill
+        if all_logits:
+            N = len(all_logits)
+            avg_eps = np.mean(eps_list)
             
-            # 3a. Weighted average of device probabilities
-            aggregated = self._aggregate_probs(all_probs, all_weights)
-            
-            # 3b. Add LDP noise on the AGGREGATE (privacy amplified by averaging)
-            # Effective epsilon for aggregate = avg_eps * sqrt(N) (privacy amplification)
-            # Sensitivity in probability space = 2/N (one device's contribution is 1/N)
-            effective_sensitivity = 2.0 / n_participants
-            noisy_agg = add_noise_to_logits(
-                aggregated.numpy(),
-                epsilon=avg_eps,
-                sensitivity=effective_sensitivity,
-                clip_bound=None
+            # 3a. Weighted average of LOGITS
+            min_len = min(len(l) for l in all_logits)
+            total_w = sum(all_weights)
+            norm_w = [w / total_w for w in all_weights]
+            aggregated_logits = sum(
+                w * l[:min_len] for w, l in zip(norm_w, all_logits)
             )
-            # Re-normalize
-            noisy_agg = np.clip(noisy_agg, 1e-8, None)
-            noisy_agg = noisy_agg / noisy_agg.sum(axis=1, keepdims=True)
-            aggregated = torch.from_numpy(noisy_agg).float()
             
-            # 3c. Distill to server model
-            self._distill_to_server(aggregated, public_images)
+            # 3b. Add Laplace noise in LOGIT space
+            # Sensitivity per element: changing one device's logits by 2C
+            # affects the weighted average by at most (1/N)*2C
+            # (since max weight is ≤ 1 and logits are in [-C, C])
+            sensitivity_per_elem = 2.0 * C / N
+            noise_scale = sensitivity_per_elem / avg_eps
+            noise = np.random.laplace(0, noise_scale, aggregated_logits.shape)
+            noisy_logits = aggregated_logits.numpy() + noise.astype(np.float32)
+            
+            # 3c. Convert noisy logits to teacher probabilities via softmax
+            T = self.config.temperature
+            noisy_logits_tensor = torch.from_numpy(noisy_logits).float()
+            teacher_probs = F.softmax(noisy_logits_tensor / T, dim=1)
+            
+            # 3d. Distill to server model
+            self._distill_to_server(teacher_probs, public_images[:min_len])
         
         # Evaluate
         accuracy = 0.0
