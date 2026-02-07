@@ -35,7 +35,7 @@ def run_single_experiment(
     temperature=3.0,
     n_rounds=20,            # 測試時 20 輪夠了，不用 50
     n_devices=10,
-    distill_epochs=10,
+    distill_epochs=3,       # 【v5修正】從 10 改成 3 (防止 catastrophic forgetting)
     local_epochs=20,        # 【v4修正】從 5 改成 20 (讓 local model 真正學到東西)
     local_lr=0.1,           # 【致命修正】從 0.01 改成 0.1 (讓 SGD 真正跑起來！)
     public_samples=10000,   # 【v3修正】使用全部 public data (10k) 做蒸餾
@@ -225,6 +225,33 @@ def sweep_temperature(dataset_name, n_classes, n_rounds):
     return results
 
 
+def sweep_distill_epochs(dataset_name, n_classes, n_rounds):
+    print("\n" + "="*60)
+    print("Sweeping: DISTILL_EPOCHS")
+    print("="*60)
+    
+    values = [1, 3, 5, 10, 20]
+    results = []
+    
+    for de in values:
+        print(f"\n>> distill_epochs={de}")
+        r = run_single_experiment(
+            dataset_name=dataset_name, n_classes=n_classes,
+            distill_epochs=de, n_rounds=n_rounds
+        )
+        r['distill_epochs'] = de
+        results.append(r)
+        print(f"   => Final: {r['final_acc']:.2f}%, Best: {r['best_acc']:.2f}%")
+    
+    print("\n" + "-"*60)
+    print(f"{'Epochs':>8} {'Final':>8} {'Best':>8} {'Improve':>10}")
+    print("-"*60)
+    for r in results:
+        print(f"{r['distill_epochs']:>8} {r['final_acc']:>7.2f}% {r['best_acc']:>7.2f}% {r['improvement']:>+9.2f}%")
+    
+    return results
+
+
 def sweep_gamma(dataset_name, n_classes, n_rounds):
     print("\n" + "="*60)
     print("Sweeping: GAMMA")
@@ -285,7 +312,7 @@ def main():
                        choices=['cifar10', 'cifar100'],
                        help='Dataset to use (default: cifar10)')
     parser.add_argument('--sweep', type=str, required=True,
-                       choices=['gamma', 'lambda', 'game_params', 'distill_lr', 'temperature', 'all'],
+                       choices=['gamma', 'lambda', 'game_params', 'distill_lr', 'temperature', 'distill_epochs', 'all'],
                        help='Which parameter to sweep (game_params = gamma + lambda)')
     parser.add_argument('--rounds', type=int, default=20,
                        help='Number of rounds per experiment (default: 20)')
@@ -317,6 +344,9 @@ def main():
     if args.sweep in ['temperature', 'all']:
         all_results['temperature'] = sweep_temperature(args.dataset, n_classes, args.rounds)
     
+    if args.sweep in ['distill_epochs', 'all']:
+        all_results['distill_epochs'] = sweep_distill_epochs(args.dataset, n_classes, args.rounds)
+    
     if args.save:
         with open(args.save, 'w') as f:
             json.dump(all_results, f, indent=2)
@@ -331,7 +361,8 @@ def main():
             continue
         best = max(results, key=lambda x: x['best_acc'])
         key = {'distill_lr': 'distill_lr', 'temperature': 'temperature', 
-               'gamma': 'gamma', 'lambda': 'lambda_mult'}[param_name]
+               'gamma': 'gamma', 'lambda': 'lambda_mult',
+               'distill_epochs': 'distill_epochs'}[param_name]
         print(f"  Best {param_name}: {best[key]} (best_acc={best['best_acc']:.2f}%)")
 
 
