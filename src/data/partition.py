@@ -312,8 +312,8 @@ def create_client_loaders(
     Create DataLoaders for each client.
     
     Args:
-        dataset: Full dataset
-        client_indices: Partition from partitioner
+        dataset: Full dataset (can be a Subset or wrapped dataset)
+        client_indices: Partition from partitioner (indices into dataset)
         batch_size: Batch size for DataLoaders
         
     Returns:
@@ -323,8 +323,36 @@ def create_client_loaders(
         # Return raw data indices if torch not available
         return client_indices
     
-    # Handle wrapped datasets
-    if hasattr(dataset, 'dataset'):
+    # =======================================================
+    # [TMC Fix] Handle nested Subset correctly
+    # =======================================================
+    # If dataset is a Subset, we need to map client_indices through the Subset's indices
+    # client_indices are positions within 'dataset', not the underlying base dataset
+    
+    if isinstance(dataset, Subset):
+        # dataset is Subset(base, subset_indices)
+        # client_indices are positions 0..len(dataset)-1
+        # We need to map them to the actual base dataset indices
+        base_dataset = dataset.dataset
+        subset_indices = np.array(dataset.indices)
+        
+        client_loaders = {}
+        for client_id, indices in client_indices.items():
+            if len(indices) == 0:
+                continue
+            # Map indices through the subset: actual_idx = subset_indices[idx]
+            actual_indices = subset_indices[indices].tolist()
+            client_subset = Subset(base_dataset, actual_indices)
+            client_loaders[client_id] = DataLoader(
+                client_subset,
+                batch_size=min(batch_size, len(actual_indices)),
+                shuffle=True,
+                drop_last=False
+            )
+        return client_loaders
+    
+    # Handle other wrapped datasets (e.g., CIFAR10Wrapper)
+    if hasattr(dataset, 'dataset') and not isinstance(dataset, Subset):
         base_dataset = dataset.dataset
     else:
         base_dataset = dataset
