@@ -38,7 +38,7 @@ def run_single_experiment(
     distill_epochs=10,
     local_epochs=5,         # 【修改】從 3 改成 5 (多給一點時間)
     local_lr=0.1,           # 【致命修正】從 0.01 改成 0.1 (讓 SGD 真正跑起來！)
-    public_samples=2000,    # 確保上限足夠
+    public_samples=10000,   # 【v3修正】使用全部 public data (10k) 做蒸餾
     # Other
     seed=42,
     use_synthetic=False,

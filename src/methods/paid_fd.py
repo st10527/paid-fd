@@ -137,26 +137,32 @@ class PAIDFD(FederatedMethod):
         
         self.price_history.append(price)
         
-        # Stage 2: Collect logits from participating devices
+        # Stage 2: Collect soft labels from participating devices
         # ==========================================
-        # [TMC Fix v2] First, collect a FIXED batch of public data so all
-        # devices compute logits on the SAME samples in the SAME order.
-        # This is essential for correct aggregation.
+        # [TMC Fix v3] Architecture:
+        #   - Collect a FIXED set of public images (use ALL public data)
+        #   - Each device computes logits -> softmax on the SAME images
+        #   - Aggregate probabilities (weighted average across devices)
+        #   - Add ONE noise pass on the aggregate (privacy amplified by N devices)
+        #   - Distill using full (image, soft_label) pairs
+        #
+        # Key insight: s_i* from the game controls payment/cost accounting,
+        # NOT the actual number of samples used for distillation.
+        # In FedMD/FedDF, all devices share logits on the FULL public set.
         # ==========================================
-        n_public_samples = min(self.config.public_samples, len(public_loader.dataset))
-        public_images = []
-        collected = 0
-        for data, _ in public_loader:
-            public_images.append(data)
-            collected += len(data)
-            if collected >= n_public_samples:
-                break
-        public_images = torch.cat(public_images, dim=0)[:n_public_samples]
         
-        all_probs = []  # Store probabilities, not raw logits
-        all_weights = []
+        # Collect ALL public images into a fixed tensor
+        public_images_list = []
+        for data, _ in public_loader:
+            public_images_list.append(data)
+        public_images = torch.cat(public_images_list, dim=0)
+        n_public = len(public_images)
+        
+        all_probs = []  # Store probability vectors per device
+        all_weights = []  # Weight = quality contribution for payment
         total_energy = {"training": 0.0, "inference": 0.0, "communication": 0.0}
         participants = []
+        avg_eps = 0.0  # Track for aggregate noise
         
         for decision in decisions:
             if not decision.participates:
@@ -173,10 +179,10 @@ class PAIDFD(FederatedMethod):
             # Get local data loader
             local_loader = client_loaders[dev_id]
             
-            # Create local model copy (on same device as server model)
+            # Create local model copy
             local_model = copy_model(self.server_model, device=self.device)
             
-            # Local training
+            # Local training on private data
             self.train_local(
                 local_model,
                 local_loader,
@@ -184,64 +190,62 @@ class PAIDFD(FederatedMethod):
                 lr=self.config.local_lr
             )
             
-            # Minimum sample constraint
-            s_min_constraint = 200
-            target_s = max(int(decision.s_star), s_min_constraint)
-            n_samples = min(target_s, n_public_samples)
-            
-            # ==========================================
-            # [TMC Fix v2] Compute logits on the FIXED public batch
-            # Then convert to probabilities BEFORE adding noise.
-            # This dramatically reduces sensitivity (from 2*clip_bound=10 to 2.0)
-            # ==========================================
+            # Compute softmax probabilities on ALL public data
             local_model.eval()
-            sample_images = public_images[:n_samples].to(self.device)
-            
-            all_logits_dev = []
-            bs = 128
-            with torch.no_grad():
-                for start in range(0, len(sample_images), bs):
-                    batch = sample_images[start:start+bs]
-                    logits = local_model(batch)
-                    all_logits_dev.append(logits.cpu())
-            logits_dev = torch.cat(all_logits_dev, dim=0)
-            
-            # Convert to probabilities (sensitivity = 2.0 instead of 10.0)
             T = self.config.temperature
-            probs_dev = F.softmax(logits_dev / T, dim=1).numpy()
+            probs_chunks = []
+            bs = 256
+            with torch.no_grad():
+                for start in range(0, n_public, bs):
+                    batch = public_images[start:start+bs].to(self.device)
+                    logits = local_model(batch)
+                    probs = F.softmax(logits / T, dim=1)
+                    probs_chunks.append(probs.cpu())
+            device_probs = torch.cat(probs_chunks, dim=0)  # (n_public, K)
             
-            # Add LDP noise in probability space (much smaller sensitivity)
-            noisy_probs = add_noise_to_logits(
-                probs_dev,
-                epsilon=decision.eps_star,
-                sensitivity=2.0,  # Probability vectors have L1 sensitivity = 2
-                clip_bound=None   # No clipping needed, already in [0,1]
-            )
-            # Re-normalize to valid probability distribution
-            noisy_probs = np.clip(noisy_probs, 1e-8, None)
-            noisy_probs = noisy_probs / noisy_probs.sum(axis=1, keepdims=True)
-            noisy_probs = torch.from_numpy(noisy_probs).float()
+            all_probs.append(device_probs)
+            # Weight by game quality (for Stackelberg consistency)
+            all_weights.append(decision.quality)
+            avg_eps += decision.eps_star
             
-            all_probs.append(noisy_probs)
-            all_weights.append(n_samples)  # Weight by actual sample count
-            
-            # Compute energy
+            # Energy accounting (s_i* used here for cost, not for limiting data)
+            s_for_cost = max(int(decision.s_star), 200)
             energy = self.energy_calc.compute_total_energy(
                 cpu_freq=getattr(dev, 'cpu_freq', 1.0),
                 data_size=getattr(dev, 'data_size', len(local_loader.dataset)),
-                s_i=n_samples,
+                s_i=s_for_cost,
                 channel_gain=getattr(dev, 'channel_gain', 1.0)
             )
             for k in ["training", "inference", "communication"]:
                 total_energy[k] += energy.get(k, 0)
             
-            # Clean up
             del local_model
         
         # Stage 3: Aggregate and distill
         if all_probs:
-            aggregated_probs = self._aggregate_probs(all_probs, all_weights)
-            self._distill_to_server(aggregated_probs, public_images)
+            n_participants = len(all_probs)
+            avg_eps = avg_eps / n_participants if n_participants > 0 else 1.0
+            
+            # 3a. Weighted average of device probabilities
+            aggregated = self._aggregate_probs(all_probs, all_weights)
+            
+            # 3b. Add LDP noise on the AGGREGATE (privacy amplified by averaging)
+            # Effective epsilon for aggregate = avg_eps * sqrt(N) (privacy amplification)
+            # Sensitivity in probability space = 2/N (one device's contribution is 1/N)
+            effective_sensitivity = 2.0 / n_participants
+            noisy_agg = add_noise_to_logits(
+                aggregated.numpy(),
+                epsilon=avg_eps,
+                sensitivity=effective_sensitivity,
+                clip_bound=None
+            )
+            # Re-normalize
+            noisy_agg = np.clip(noisy_agg, 1e-8, None)
+            noisy_agg = noisy_agg / noisy_agg.sum(axis=1, keepdims=True)
+            aggregated = torch.from_numpy(noisy_agg).float()
+            
+            # 3c. Distill to server model
+            self._distill_to_server(aggregated, public_images)
         
         # Evaluate
         accuracy = 0.0
@@ -316,7 +320,8 @@ class PAIDFD(FederatedMethod):
             public_images: Corresponding public images (N, C, H, W)
         
         Uses KL divergence loss with temperature scaling.
-        Now receives pre-collected (images, probs) pairs so alignment is guaranteed.
+        Receives pre-collected (images, probs) pairs so alignment is guaranteed.
+        Uses all N samples for distillation.
         """
         self.server_model.train()
         optimizer = torch.optim.Adam(
@@ -325,23 +330,23 @@ class PAIDFD(FederatedMethod):
         )
         
         T = self.config.temperature
-        n_target = len(teacher_probs)
-        # Ensure both are on correct device
-        teacher_probs = teacher_probs.to(self.device)
-        public_images = public_images.to(self.device)
+        n_target = min(len(teacher_probs), len(public_images))
         
+        # Keep teacher_probs on CPU, move batches to device on-the-fly
+        # to avoid GPU OOM with large public sets
         batch_size = 128
         
         for epoch in range(self.config.distill_epochs):
-            # Shuffle indices each epoch for better training
             perm = torch.randperm(n_target)
+            epoch_loss = 0.0
+            n_batches = 0
             
             for start in range(0, n_target, batch_size):
                 end = min(start + batch_size, n_target)
                 idx = perm[start:end]
                 
-                data = public_images[idx]
-                target = teacher_probs[idx]
+                data = public_images[idx].to(self.device)
+                target = teacher_probs[idx].to(self.device)
                 
                 # Student forward pass
                 student_logits = self.server_model(data)
@@ -349,13 +354,18 @@ class PAIDFD(FederatedMethod):
                 # KL divergence: KL(teacher || student)
                 loss = F.kl_div(
                     F.log_softmax(student_logits / T, dim=1),
-                    target,  # Already probabilities
+                    target,
                     reduction='batchmean'
                 ) * (T * T)
                 
                 optimizer.zero_grad()
                 loss.backward()
+                # Gradient clipping for stability
+                torch.nn.utils.clip_grad_norm_(self.server_model.parameters(), 5.0)
                 optimizer.step()
+                
+                epoch_loss += loss.item()
+                n_batches += 1
     
     def aggregate(self, updates: List[Dict], weights: List[float]) -> None:
         """

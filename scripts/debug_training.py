@@ -377,14 +377,18 @@ def check_full_round():
     # 噪聲分析
     print("\n--- Noise Analysis ---")
     avg_eps = game_result['avg_eps']
+    n_part = game_result['n_participants']
     
-    # Old method: sensitivity = 2*clip_bound = 10
-    old_scale = 10.0 / avg_eps
-    # New method: sensitivity = 2.0 (probability space)
-    new_scale = 2.0 / avg_eps
-    print(f"Old noise scale (logit space, sens=10): {old_scale:.4f}")
-    print(f"New noise scale (prob space, sens=2): {new_scale:.4f}")
-    print(f"Noise reduction factor: {old_scale/new_scale:.1f}x")
+    # v3 method: noise on aggregate, sensitivity = 2/N
+    effective_sens = 2.0 / n_part
+    noise_scale = effective_sens / avg_eps
+    print(f"Avg epsilon: {avg_eps:.4f}")
+    print(f"N participants: {n_part}")
+    print(f"Effective sensitivity (2/N): {effective_sens:.4f}")
+    print(f"Noise scale (Laplace): {noise_scale:.6f}")
+    print(f"Avg probability per class (1/100): 0.01")
+    print(f"Noise/Signal ratio: {noise_scale / 0.01:.2f}")
+    print(f"  -> {'OK (noise < signal)' if noise_scale < 0.01 else 'Noisy but averaging helps' if noise_scale < 0.1 else 'Very noisy'}")
     
     # 模型
     model = get_model('resnet18', num_classes=100)
@@ -397,7 +401,7 @@ def check_full_round():
         local_epochs=5,
         local_lr=0.1,
         distill_epochs=10,
-        public_samples=2000
+        public_samples=10000   # v3: use ALL public data
     )
     
     method = PAIDFD(model, config, n_classes=100, device=device)
