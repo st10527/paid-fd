@@ -477,3 +477,62 @@ def create_synthetic_datasets(
     print(f"  Public: {n_public} samples, 10 classes")
     
     return train, test, public
+
+# ==========================================
+# [TMC Safe Mode] 新增：安全切割函數
+# ==========================================
+def load_cifar100_safe_split(root='./data', n_public=10000, seed=42):
+    """
+    TMC Safe Mode: 
+    將 CIFAR-100 Training Set (50k) 切割為：
+    1. Private Data (40k): 給 User 做 Local Training (Non-IID)
+    2. Public Data (10k): 給 Server 做 Knowledge Distillation (IID)
+    
+    保留原本的 Test Set (10k) 僅作最終評估，確保無洩漏 (Zero Leakage)。
+    """
+    import torch
+    import torchvision
+    import torchvision.transforms as transforms
+    from torch.utils.data import Subset
+    import numpy as np
+
+    # 1. 定義標準轉換 (與 Private 一致)
+    stats = ((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))
+    transform_train = transforms.Compose([
+        transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize(*stats)
+    ])
+    transform_test = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize(*stats)
+    ])
+
+    # 2. 載入完整 Training Set
+    full_train_set = torchvision.datasets.CIFAR100(
+        root=root, train=True, download=True, transform=transform_train
+    )
+    
+    # 3. 載入 Test Set (神聖不可侵犯)
+    test_set = torchvision.datasets.CIFAR100(
+        root=root, train=False, download=True, transform=transform_test
+    )
+
+    # 4. 執行安全切割 (Safe Split)
+    # 使用固定 seed 確保每次實驗的 Public Data 是一樣的
+    np.random.seed(seed)
+    indices = np.random.permutation(len(full_train_set))
+    
+    public_indices = indices[:n_public]      # 前 10k 給 Public
+    private_indices = indices[n_public:]     # 後 40k 給 Private
+    
+    public_set = Subset(full_train_set, public_indices)
+    private_set = Subset(full_train_set, private_indices)
+
+    print(f"[TMC Safe Mode] Split Report:")
+    print(f"  Public (Server):  {len(public_set)} samples (from Train)")
+    print(f"  Private (Users):  {len(private_set)} samples (from Train)")
+    print(f"  Test (Evaluation):{len(test_set)} samples (from Test)")
+    
+    return private_set, public_set, test_set

@@ -169,8 +169,21 @@ class PAIDFD(FederatedMethod):
                 lr=self.config.local_lr
             )
             
-            # Compute logits on public data
-            n_samples = min(int(decision.s_star), self.config.public_samples)
+            # ==========================================
+            # [TMC Fix] 強制設定最小上傳量，避免冷啟動失敗
+            # ==========================================
+            # 原本的寫法可能是: n_samples = min(int(decision.s_star), self.config.public_samples)
+            
+            # 修改為:
+            s_min_constraint = 200  # 門檻：至少要 200 張圖才能學到東西
+            target_s = max(int(decision.s_star), s_min_constraint)
+            n_samples = min(target_s, self.config.public_samples) # 當然不能超過 public 總數
+            
+            # (Optional) Log 一下，讓你知道這個防護觸發了沒
+            if decision.s_star < s_min_constraint:
+                pass # 或者 print(f"Warning: s*={decision.s_star:.1f} too low, clamped to {s_min_constraint}")
+
+            # 接下來繼續做 compute_logits ...
             logits = self.compute_logits(local_model, public_loader, n_samples)
             
             # Add LDP noise

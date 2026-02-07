@@ -55,17 +55,26 @@ def run_single_experiment(
     set_seed(seed)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     
-    # Load data
-    if use_synthetic:
-        from src.data.datasets import create_synthetic_datasets
-        train, test, public = create_synthetic_datasets(
-            n_train=n_devices * 500,
-            n_test=1000,
-            n_public=2000,
-            n_classes=n_classes,
-            seed=seed
-        )
-        train_targets = train.targets
+    # -----------------------------------------------------------
+    # [修正開始] 切換數據源
+    # -----------------------------------------------------------
+    if dataset_name == 'cifar100':
+        print("[TMC] Switching to Safe Mode (CIFAR-100 Only)...")
+        from datasets import load_cifar100_safe_split # 引用剛剛新增的函數
+        
+        # 1. 取得乾淨的三份資料
+        private_dataset, public_dataset, test_dataset = load_cifar100_safe_split(root='./data')
+        
+        # 2. 建立 Loader
+        public_loader = torch.utils.data.DataLoader(public_dataset, batch_size=128, shuffle=True, num_workers=2)
+        test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=128, shuffle=False, num_workers=2)
+        
+        # 3. 欺騙下游程式：把 private_dataset 偽裝成 train_dataset 傳下去
+        train_dataset = private_dataset
+        
+        # [重要] 強制設定 n_classes，以免它去讀 STL-10 的設定
+        n_classes = 100
+    
     else:
         from src.data.datasets import load_dataset, load_stl10
         train, test, n_classes = load_dataset(dataset_name, root='./data')
