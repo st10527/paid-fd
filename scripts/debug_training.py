@@ -333,6 +333,7 @@ def check_full_round():
     from src.devices.heterogeneity import HeterogeneityGenerator
     from src.models import get_model
     from src.methods.paid_fd import PAIDFD, PAIDFDConfig
+    from src.game.stackelberg import StackelbergSolver
     from torch.utils.data import DataLoader
     
     set_seed(42)
@@ -360,6 +361,31 @@ def check_full_round():
         if dev.device_id in client_indices:
             dev.data_size = len(client_indices[dev.device_id])
     
+    # ====== 關鍵診斷: 遊戲參數 ======
+    print("\n--- Game Parameters ---")
+    solver = StackelbergSolver(gamma=100.0)
+    game_result = solver.solve(devices)
+    print(f"Optimal price p*: {game_result['price']:.4f}")
+    print(f"Participation rate: {game_result['participation_rate']:.2%}")
+    print(f"Avg epsilon: {game_result['avg_eps']:.4f}")
+    print(f"Avg s*: {game_result['avg_s']:.1f}")
+    
+    for d in game_result['decisions']:
+        if d.participates:
+            print(f"  Device {d.device_id}: s*={d.s_star:.1f}, eps*={d.eps_star:.4f}, q={d.quality:.4f}")
+    
+    # 噪聲分析
+    print("\n--- Noise Analysis ---")
+    avg_eps = game_result['avg_eps']
+    
+    # Old method: sensitivity = 2*clip_bound = 10
+    old_scale = 10.0 / avg_eps
+    # New method: sensitivity = 2.0 (probability space)
+    new_scale = 2.0 / avg_eps
+    print(f"Old noise scale (logit space, sens=10): {old_scale:.4f}")
+    print(f"New noise scale (prob space, sens=2): {new_scale:.4f}")
+    print(f"Noise reduction factor: {old_scale/new_scale:.1f}x")
+    
     # 模型
     model = get_model('resnet18', num_classes=100)
     
@@ -376,31 +402,13 @@ def check_full_round():
     
     method = PAIDFD(model, config, n_classes=100, device=device)
     
-    # 運行第一輪，帶詳細日誌
-    print("\nRunning round 0...")
-    
     # 先評估初始準確率
     initial_result = method.evaluate(test_loader)
-    print(f"Initial accuracy: {initial_result['accuracy']*100:.2f}%")
+    print(f"\nInitial accuracy: {initial_result['accuracy']*100:.2f}%")
     
-    # 運行一輪
-    result = method.run_round(
-        round_idx=0,
-        devices=devices,
-        client_loaders=client_loaders,
-        public_loader=public_loader,
-        test_loader=test_loader
-    )
-    
-    print(f"\nRound 0 results:")
-    print(f"  - accuracy: {result.accuracy*100:.2f}%")
-    print(f"  - loss: {result.loss:.4f}")
-    print(f"  - participation: {result.participation_rate*100:.1f}%")
-    print(f"  - n_participants: {result.n_participants}")
-    
-    # 運行更多輪
-    print("\nRunning 4 more rounds...")
-    for r in range(1, 5):
+    # 運行訓練輪次
+    print("\nRunning training rounds...")
+    for r in range(10):
         result = method.run_round(
             round_idx=r,
             devices=devices,
@@ -408,7 +416,7 @@ def check_full_round():
             public_loader=public_loader,
             test_loader=test_loader
         )
-        print(f"Round {r}: acc={result.accuracy*100:.2f}%, loss={result.loss:.4f}")
+        print(f"Round {r}: acc={result.accuracy*100:.2f}%, loss={result.loss:.4f}, participants={result.n_participants}")
 
 
 def main():

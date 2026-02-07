@@ -138,7 +138,22 @@ class PAIDFD(FederatedMethod):
         self.price_history.append(price)
         
         # Stage 2: Collect logits from participating devices
-        all_logits = []
+        # ==========================================
+        # [TMC Fix v2] First, collect a FIXED batch of public data so all
+        # devices compute logits on the SAME samples in the SAME order.
+        # This is essential for correct aggregation.
+        # ==========================================
+        n_public_samples = min(self.config.public_samples, len(public_loader.dataset))
+        public_images = []
+        collected = 0
+        for data, _ in public_loader:
+            public_images.append(data)
+            collected += len(data)
+            if collected >= n_public_samples:
+                break
+        public_images = torch.cat(public_images, dim=0)[:n_public_samples]
+        
+        all_probs = []  # Store probabilities, not raw logits
         all_weights = []
         total_energy = {"training": 0.0, "inference": 0.0, "communication": 0.0}
         participants = []
@@ -169,33 +184,46 @@ class PAIDFD(FederatedMethod):
                 lr=self.config.local_lr
             )
             
-            # ==========================================
-            # [TMC Fix] 強制設定最小上傳量，避免冷啟動失敗
-            # ==========================================
-            # 原本的寫法可能是: n_samples = min(int(decision.s_star), self.config.public_samples)
-            
-            # 修改為:
-            s_min_constraint = 200  # 門檻：至少要 200 張圖才能學到東西
+            # Minimum sample constraint
+            s_min_constraint = 200
             target_s = max(int(decision.s_star), s_min_constraint)
-            n_samples = min(target_s, self.config.public_samples) # 當然不能超過 public 總數
+            n_samples = min(target_s, n_public_samples)
             
-            # (Optional) Log 一下，讓你知道這個防護觸發了沒
-            if decision.s_star < s_min_constraint:
-                pass # 或者 print(f"Warning: s*={decision.s_star:.1f} too low, clamped to {s_min_constraint}")
-
-            # 接下來繼續做 compute_logits ...
-            logits = self.compute_logits(local_model, public_loader, n_samples)
+            # ==========================================
+            # [TMC Fix v2] Compute logits on the FIXED public batch
+            # Then convert to probabilities BEFORE adding noise.
+            # This dramatically reduces sensitivity (from 2*clip_bound=10 to 2.0)
+            # ==========================================
+            local_model.eval()
+            sample_images = public_images[:n_samples].to(self.device)
             
-            # Add LDP noise
-            noisy_logits = add_noise_to_logits(
-                logits.numpy(),
+            all_logits_dev = []
+            bs = 128
+            with torch.no_grad():
+                for start in range(0, len(sample_images), bs):
+                    batch = sample_images[start:start+bs]
+                    logits = local_model(batch)
+                    all_logits_dev.append(logits.cpu())
+            logits_dev = torch.cat(all_logits_dev, dim=0)
+            
+            # Convert to probabilities (sensitivity = 2.0 instead of 10.0)
+            T = self.config.temperature
+            probs_dev = F.softmax(logits_dev / T, dim=1).numpy()
+            
+            # Add LDP noise in probability space (much smaller sensitivity)
+            noisy_probs = add_noise_to_logits(
+                probs_dev,
                 epsilon=decision.eps_star,
-                clip_bound=self.config.clip_bound
+                sensitivity=2.0,  # Probability vectors have L1 sensitivity = 2
+                clip_bound=None   # No clipping needed, already in [0,1]
             )
-            noisy_logits = torch.from_numpy(noisy_logits).float()
+            # Re-normalize to valid probability distribution
+            noisy_probs = np.clip(noisy_probs, 1e-8, None)
+            noisy_probs = noisy_probs / noisy_probs.sum(axis=1, keepdims=True)
+            noisy_probs = torch.from_numpy(noisy_probs).float()
             
-            all_logits.append(noisy_logits)
-            all_weights.append(decision.s_star)
+            all_probs.append(noisy_probs)
+            all_weights.append(n_samples)  # Weight by actual sample count
             
             # Compute energy
             energy = self.energy_calc.compute_total_energy(
@@ -211,9 +239,9 @@ class PAIDFD(FederatedMethod):
             del local_model
         
         # Stage 3: Aggregate and distill
-        if all_logits:
-            aggregated_logits = self._aggregate_logits(all_logits, all_weights)
-            self._distill_to_server(aggregated_logits, public_loader)
+        if all_probs:
+            aggregated_probs = self._aggregate_probs(all_probs, all_weights)
+            self._distill_to_server(aggregated_probs, public_images)
         
         # Evaluate
         accuracy = 0.0
@@ -247,54 +275,48 @@ class PAIDFD(FederatedMethod):
         self.round_history.append(result)
         return result
     
-    def _aggregate_logits(
+    def _aggregate_probs(
         self,
-        logits_list: List[torch.Tensor],
+        probs_list: List[torch.Tensor],
         weights: List[float]
     ) -> torch.Tensor:
         """
-        Aggregate logits from multiple devices.
+        Aggregate probability vectors from multiple devices.
         
-        IMPORTANT: We aggregate in probability space, not logit space.
-        Direct averaging of logits from different models produces garbage
-        because each model's logit scale and semantics differ.
+        Each device already converted logits -> softmax -> noisy probs.
+        We just do a weighted average here.
         
-        Method: 
-        1. Convert each device's logits to probabilities (softmax)
-        2. Weighted average of probabilities
-        3. Return as soft labels (keep as probabilities, not convert back to logits)
+        Returns:
+            Aggregated probability tensor (N, K)
         """
         # Find minimum length (in case of different sizes)
-        min_len = min(len(l) for l in logits_list)
-        
-        # Truncate and convert to probabilities
-        T = self.config.temperature
-        probs_list = [
-            F.softmax(l[:min_len] / T, dim=1) for l in logits_list
-        ]
+        min_len = min(len(p) for p in probs_list)
+        probs_list = [p[:min_len] for p in probs_list]
         
         # Weighted average of probabilities
         total_weight = sum(weights)
         normalized_weights = [w / total_weight for w in weights]
         
-        aggregated_probs = sum(
+        aggregated = sum(
             w * probs for w, probs in zip(normalized_weights, probs_list)
         )
         
-        # Return as log-probabilities (more numerically stable for KL divergence)
-        # Add small epsilon to avoid log(0)
-        return torch.log(aggregated_probs + 1e-10)
+        return aggregated
     
     def _distill_to_server(
         self,
-        target_log_probs: torch.Tensor,
-        public_loader: Any
+        teacher_probs: torch.Tensor,
+        public_images: torch.Tensor
     ):
         """
         Distill aggregated knowledge to server model.
         
-        Uses KL divergence loss. The target is now log-probabilities
-        from the aggregated ensemble.
+        Args:
+            teacher_probs: Aggregated soft labels (N, K) - probability vectors
+            public_images: Corresponding public images (N, C, H, W)
+        
+        Uses KL divergence loss with temperature scaling.
+        Now receives pre-collected (images, probs) pairs so alignment is guaranteed.
         """
         self.server_model.train()
         optimizer = torch.optim.Adam(
@@ -303,38 +325,37 @@ class PAIDFD(FederatedMethod):
         )
         
         T = self.config.temperature
-        target_log_probs = target_log_probs.to(self.device)
-        n_target = len(target_log_probs)
+        n_target = len(teacher_probs)
+        # Ensure both are on correct device
+        teacher_probs = teacher_probs.to(self.device)
+        public_images = public_images.to(self.device)
+        
+        batch_size = 128
         
         for epoch in range(self.config.distill_epochs):
-            idx = 0
-            for data, _ in public_loader:
-                if idx >= n_target:
-                    break
+            # Shuffle indices each epoch for better training
+            perm = torch.randperm(n_target)
+            
+            for start in range(0, n_target, batch_size):
+                end = min(start + batch_size, n_target)
+                idx = perm[start:end]
                 
-                batch_size = min(len(data), n_target - idx)
-                data = data[:batch_size].to(self.device)
-                teacher_log_probs = target_log_probs[idx:idx + batch_size]
+                data = public_images[idx]
+                target = teacher_probs[idx]
                 
                 # Student forward pass
                 student_logits = self.server_model(data)
                 
                 # KL divergence: KL(teacher || student)
-                # teacher is already log-probabilities
-                # Need to convert to probabilities for KL div target
-                teacher_probs = torch.exp(teacher_log_probs)
-                
                 loss = F.kl_div(
                     F.log_softmax(student_logits / T, dim=1),
-                    teacher_probs,  # Already softmax'd with temperature
+                    target,  # Already probabilities
                     reduction='batchmean'
                 ) * (T * T)
                 
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
-                
-                idx += batch_size
     
     def aggregate(self, updates: List[Dict], weights: List[float]) -> None:
         """
