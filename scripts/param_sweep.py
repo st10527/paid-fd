@@ -28,17 +28,17 @@ def run_single_experiment(
     dataset_name="cifar10",
     n_classes=10,
     # === YOUR CONTRIBUTION: Game parameters (NEED TUNING) ===
-    gamma=10.0,
+    gamma=100.0,
     lambda_multiplier=0.01,
     # === Literature-based: Fixed values ===
-    distill_lr=0.01,            # Standard for KD
-    temperature=3.0,            # Hinton 2015: T=2-5
-    n_rounds=20,
+    distill_lr=0.001,       # 【建議】配合 Adam，0.001 比較穩 (0.01 可能太震盪)
+    temperature=3.0,
+    n_rounds=20,            # 測試時 20 輪夠了，不用 50
     n_devices=10,
-    distill_epochs=10,          # Sufficient for convergence
-    local_epochs=3,             # FedAvg standard
-    local_lr=0.01,              # Standard for CIFAR
-    public_samples=1000,
+    distill_epochs=10,
+    local_epochs=5,         # 【修改】從 3 改成 5 (多給一點時間)
+    local_lr=0.1,           # 【致命修正】從 0.01 改成 0.1 (讓 SGD 真正跑起來！)
+    public_samples=2000,    # 確保上限足夠
     # Other
     seed=42,
     use_synthetic=False,
@@ -214,7 +214,7 @@ def sweep_gamma(dataset_name, n_classes, n_rounds):
     print("Sweeping: GAMMA")
     print("="*60)
     
-    values = [5, 10, 20, 50]
+    values = [50, 100, 500, 1000]
     results = []
     
     for gamma in values:
