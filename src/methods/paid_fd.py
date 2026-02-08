@@ -45,7 +45,7 @@ class PAIDFDConfig:
     
     # Distillation (Literature: Hinton 2015, FedMD, FedDF)
     distill_epochs: int = 10     # More epochs helps convergence
-    distill_lr: float = 0.01     # Adam lr for distillation
+    distill_lr: float = 0.005    # 【sweep結果】0.005 最佳 (42.1% @R25)
     temperature: float = 3.0     # Hinton suggests 2-5, we use 3
     
     # Privacy (YOUR CONTRIBUTION)

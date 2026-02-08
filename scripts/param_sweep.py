@@ -31,7 +31,7 @@ def run_single_experiment(
     gamma=100.0,
     lambda_multiplier=0.01,
     # === Literature-based: Fixed values ===
-    distill_lr=0.001,       # 【建議】配合 Adam，0.001 比較穩 (0.01 可能太震盪)
+    distill_lr=0.005,       # 【sweep結果】0.005 最佳 (42.1% @R25, 持續上升)
     temperature=3.0,
     n_rounds=20,            # 測試時 20 輪夠了，不用 50
     n_devices=10,
