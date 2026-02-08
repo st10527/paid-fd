@@ -1,0 +1,20 @@
+============================================================
+PAID-FD Parameter Sweep
+============================================================
+Dataset: CIFAR100 (100 classes)
+Rounds: 50
+Devices: 10
+GPU: CUDA
+
+============================================================
+Sweeping: GAMMA
+============================================================
+
+>> gamma=50
+[TMC] Switching to Safe Mode (CIFAR-100 Only)...
+[TMC Safe Mode] Split Report:
+  Public (Server):  10000 samples (from Train)
+  Private (Users):  40000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+      [eps*=5.72, s*=52]
+      R5:1.0% R10:1.0% R15:1.0% 
