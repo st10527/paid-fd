@@ -38,9 +38,9 @@ class PAIDFDConfig:
     delta: float = 0.01          # Search tolerance
     budget: float = float('inf') # Budget constraint
     
-    # Local training (Literature: FedAvg, FedProx)
-    local_epochs: int = 3        # FedAvg uses 1-5, we use 3 as middle ground
-    local_lr: float = 0.01       # Standard for SGD on CIFAR
+    # Local training (all methods use the same for fair comparison)
+    local_epochs: int = 20       # 【v4確認】充分本地訓練讓 logits 有品質
+    local_lr: float = 0.1        # 【v4確認】SGD with momentum on CIFAR-100
     local_momentum: float = 0.9  # Standard SGD momentum
     
     # Distillation (Literature: Hinton 2015, FedMD, FedDF)
