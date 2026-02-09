@@ -1,18 +1,18 @@
 """
-Fixed-Epsilon Baseline for PAID-FD Ablation Study
+FedMD: Federated Model Distillation (Li & Wang, NeurIPS 2019)
 
-Uses a fixed privacy budget ε for all devices,
-without the adaptive Stackelberg game mechanism.
+Classic federated distillation baseline.
+Same distillation framework as PAID-FD but WITHOUT:
+  - Stackelberg game / pricing
+  - Local Differential Privacy (no noise)
+  - Adaptive participation / quality
 
-v4-aligned: Uses the same logit-space aggregation pipeline as PAID-FD:
-  1. Each device: local train → compute logits → clip to [-C, C]
-  2. Server: simple average of clipped logits (equal weights)
-  3. Server: Laplace noise with FIXED ε (sensitivity = 2C/N)
-  4. Server: softmax(noisy_logits / T) → teacher probs
-  5. Distill server model from teacher
+All devices participate equally, upload raw logits, simple average.
+This is the "upper bound" for FD with no privacy.
 
-Purpose: Demonstrate the value of adaptive privacy allocation (game).
-  - Same pipeline as PAID-FD, but ε is fixed → shows game's benefit.
+Reference:
+  Li & Wang, "FedMD: Heterogenous Federated Learning via Model
+  Distillation", NeurIPS 2019 Workshop
 """
 
 import torch
@@ -28,47 +28,43 @@ from ..models.utils import copy_model
 
 
 @dataclass
-class FixedEpsilonConfig:
-    """Configuration for Fixed-Epsilon baseline."""
-    # Fixed privacy budget (no adaptation)
-    epsilon: float = 1.0
-
-    # Local training (same as PAID-FD)
+class FedMDConfig:
+    """Configuration for FedMD."""
+    # Local training
     local_epochs: int = 20
     local_lr: float = 0.1
     local_momentum: float = 0.9
 
-    # Distillation (same as PAID-FD)
+    # Distillation
     distill_epochs: int = 10
     distill_lr: float = 0.005
     temperature: float = 3.0
 
-    # Privacy
+    # Logit clipping (for stability, not privacy)
     clip_bound: float = 5.0
 
-    # Participation
-    participation_rate: float = 1.0
+    # Public data
+    public_samples: int = 10000
 
 
-class FixedEpsilon(FederatedMethod):
+class FedMD(FederatedMethod):
     """
-    Fixed-Epsilon Federated Distillation.
+    FedMD: Federated Model Distillation.
 
-    Identical to PAID-FD pipeline but with:
-      - Fixed ε for ALL devices (no Stackelberg game)
-      - Equal weights (no quality-based weighting)
-      - All devices participate (or random subset)
+    Protocol per round:
+      1. Server broadcasts global model
+      2. All devices train locally on private data
+      3. All devices compute logits on public data (NO noise)
+      4. Server aggregates logits (simple average, equal weights)
+      5. Server distills aggregated knowledge into global model
 
-    Ablation to show the benefit of:
-      1. Adaptive privacy allocation (ε* per device)
-      2. Quality-based weighting (s* per device)
-      3. Incentive mechanism (price p*)
+    Key: No privacy, no game, no incentive → pure FD performance upper bound.
     """
 
     def __init__(
         self,
         server_model: nn.Module,
-        config: FixedEpsilonConfig = None,
+        config: FedMDConfig = None,
         n_classes: int = 100,
         device: str = None
     ):
@@ -76,9 +72,8 @@ class FixedEpsilon(FederatedMethod):
             device = "cuda" if torch.cuda.is_available() else "cpu"
 
         super().__init__(server_model, n_classes, device)
-        self.config = config or FixedEpsilonConfig()
+        self.config = config or FedMDConfig()
         self.energy_calc = EnergyCalculator()
-        self.rng = np.random.RandomState(42)
 
     def run_round(
         self,
@@ -88,18 +83,8 @@ class FixedEpsilon(FederatedMethod):
         public_loader: Any,
         test_loader: Optional[Any] = None
     ) -> RoundResult:
-        """Execute one round of Fixed-ε FD."""
+        """Execute one round of FedMD."""
         self.current_round = round_idx
-
-        # Select participants
-        n_devices = len(devices)
-        n_participants = max(1, int(n_devices * self.config.participation_rate))
-        if n_participants < n_devices:
-            participant_ids = sorted(
-                self.rng.choice(n_devices, size=n_participants, replace=False).tolist()
-            )
-        else:
-            participant_ids = list(range(n_devices))
 
         # ── Collect ALL public images into fixed tensor ──
         public_images_list = []
@@ -111,14 +96,14 @@ class FixedEpsilon(FederatedMethod):
         C = self.config.clip_bound
         all_logits = []
         total_energy = {"training": 0.0, "inference": 0.0, "communication": 0.0}
-        actual_participants = []
+        participants = []
 
-        for dev_id in participant_ids:
+        # ── All devices participate (no selection) ──
+        for dev_id, dev in enumerate(devices):
             if dev_id not in client_loaders:
                 continue
 
-            actual_participants.append(dev_id)
-            dev = devices[dev_id]
+            participants.append(dev_id)
             local_loader = client_loaders[dev_id]
             local_model = copy_model(self.server_model, device=self.device)
 
@@ -130,7 +115,7 @@ class FixedEpsilon(FederatedMethod):
                 lr=self.config.local_lr
             )
 
-            # Compute clipped logits on ALL public data
+            # Compute clipped logits on ALL public data (NO noise)
             local_model.eval()
             logit_chunks = []
             bs = 256
@@ -156,26 +141,17 @@ class FixedEpsilon(FederatedMethod):
 
             del local_model
 
-        # ── Aggregate: simple average + FIXED-ε noise ──
+        # ── Aggregate: simple average (NO noise) ──
         if all_logits:
             N = len(all_logits)
             min_len = min(len(l) for l in all_logits)
-
-            # Simple average (equal weights, no quality-based weighting)
             aggregated_logits = sum(l[:min_len] for l in all_logits) / N
 
-            # Add Laplace noise with FIXED epsilon
-            sensitivity_per_elem = 2.0 * C / N
-            noise_scale = sensitivity_per_elem / self.config.epsilon
-            noise = np.random.laplace(0, noise_scale, aggregated_logits.shape)
-            noisy_logits = aggregated_logits.numpy() + noise.astype(np.float32)
-
-            # Convert to teacher probs
+            # Convert to teacher probs via softmax
             T = self.config.temperature
-            noisy_logits_tensor = torch.from_numpy(noisy_logits).float()
-            teacher_probs = F.softmax(noisy_logits_tensor / T, dim=1)
+            teacher_probs = F.softmax(aggregated_logits / T, dim=1)
 
-            # Distill
+            # Distill to server model
             self._distill_to_server(teacher_probs, public_images[:min_len])
 
         # Evaluate
@@ -186,18 +162,19 @@ class FixedEpsilon(FederatedMethod):
             accuracy = eval_result["accuracy"]
             loss = eval_result["loss"]
 
-        participation_rate = len(actual_participants) / n_devices if n_devices > 0 else 0
+        participation_rate = len(participants) / len(devices) if devices else 0
 
         result = RoundResult(
             round_idx=round_idx,
             accuracy=accuracy,
             loss=loss,
             participation_rate=participation_rate,
-            n_participants=len(actual_participants),
+            n_participants=len(participants),
             energy=total_energy,
             extra={
-                "method": f"Fixed-eps-{self.config.epsilon}",
-                "fixed_epsilon": self.config.epsilon,
+                "method": "FedMD",
+                "n_public": n_public,
+                "epsilon": float('inf'),  # No privacy
             }
         )
 

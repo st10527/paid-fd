@@ -28,14 +28,14 @@ def run_single_experiment(
     dataset_name="cifar10",
     n_classes=10,
     # === YOUR CONTRIBUTION: Game parameters (NEED TUNING) ===
-    gamma=100.0,
-    lambda_multiplier=0.01,
+    gamma=500.0,            # 【sweep結果】500 最佳 (33.6% @R25)
+    lambda_multiplier=1.0,   # 【sweep結果】1.0 最佳 (43.2% @R25)
     # === Literature-based: Fixed values ===
     distill_lr=0.005,       # 【sweep結果】0.005 最佳 (42.1% @R25, 持續上升)
     temperature=3.0,
     n_rounds=20,            # 測試時 20 輪夠了，不用 50
     n_devices=10,
-    distill_epochs=3,       # 【v5修正】從 10 改成 3 (防止 catastrophic forgetting)
+    distill_epochs=10,      # 【確認】10 配合 distill_lr=0.005 效果最好
     local_epochs=20,        # 【v4修正】從 5 改成 20 (讓 local model 真正學到東西)
     local_lr=0.1,           # 【致命修正】從 0.01 改成 0.1 (讓 SGD 真正跑起來！)
     public_samples=10000,   # 【v3修正】使用全部 public data (10k) 做蒸餾

@@ -34,7 +34,7 @@ class PAIDFDConfig:
     - distill_lr: Standard Adam default is 0.001, but KD often uses 0.01
     """
     # Game parameters (YOUR CONTRIBUTION - need tuning)
-    gamma: float = 10.0          # Server valuation coefficient
+    gamma: float = 500.0         # 【sweep結果】Server valuation coefficient
     delta: float = 0.01          # Search tolerance
     budget: float = float('inf') # Budget constraint
     
@@ -44,7 +44,7 @@ class PAIDFDConfig:
     local_momentum: float = 0.9  # Standard SGD momentum
     
     # Distillation (Literature: Hinton 2015, FedMD, FedDF)
-    distill_epochs: int = 10     # More epochs helps convergence
+    distill_epochs: int = 10     # 配合 distill_lr=0.005 效果最好
     distill_lr: float = 0.005    # 【sweep結果】0.005 最佳 (42.1% @R25)
     temperature: float = 3.0     # Hinton suggests 2-5, we use 3
     
