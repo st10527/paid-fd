@@ -155,6 +155,30 @@ def create_method(method_name, n_classes=100, device='cuda', **kwargs):
         method = FedMD(model, config, n_classes=n_classes, device=device)
         return method, 'No-Privacy'
 
+    elif method_name == 'CSRA':
+        from src.methods.csra import CSRA, CSRAConfig
+        config = CSRAConfig(
+            local_epochs=kwargs.get('local_epochs', 20),
+            local_lr=kwargs.get('local_lr', 0.1),
+            budget_per_round=kwargs.get('budget_per_round', 50.0),
+            clip_norm=kwargs.get('clip_norm', 1.0),
+        )
+        method = CSRA(model, config, n_classes=n_classes, device=device)
+        return method, 'CSRA'
+
+    elif method_name == 'FedGMKD':
+        from src.methods.fedgmkd import FedGMKD, FedGMKDConfig
+        config = FedGMKDConfig(
+            local_epochs=kwargs.get('local_epochs', 20),
+            local_lr=kwargs.get('local_lr', 0.1),
+            alpha=kwargs.get('alpha', 0.5),
+            beta=kwargs.get('beta', 0.5),
+            temperature=kwargs.get('temperature', 3.0),
+            n_gmm_components=kwargs.get('n_gmm_components', 2),
+        )
+        method = FedGMKD(model, config, n_classes=n_classes, device=device)
+        return method, 'FedGMKD'
+
     elif method_name.startswith('Fixed-eps-'):
         eps = float(method_name.split('-')[-1])
         from src.methods.fixed_eps import FixedEpsilon, FixedEpsilonConfig
@@ -311,7 +335,7 @@ def phase_comparison(args):
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    methods = ['PAID-FD', 'FedMD', 'FedAvg', 'Fixed-eps-1.0', 'Fixed-eps-5.0']
+    methods = ['PAID-FD', 'FedMD', 'FedAvg', 'CSRA', 'FedGMKD', 'Fixed-eps-1.0', 'Fixed-eps-5.0']
     seeds = list(range(42, 42 + args.seeds))
 
     results = {

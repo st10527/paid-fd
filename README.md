@@ -169,13 +169,14 @@ print(comparison)
 
 ## 🔧 Methods
 
-| Method | Description | Status |
-|--------|-------------|--------|
-| **PAID-FD** | Stackelberg + adaptive ε | ✅ |
-| **Fixed-ε** | Fixed privacy budget | ✅ |
-| FedMD | NeurIPS 2019 | 🔜 |
-| CSRA | TIFS 2024 | 🔜 |
-| FedGMKD | NeurIPS 2024 | 🔜 |
+| Method | Description | Type | Status |
+|--------|-------------|------|--------|
+| **PAID-FD** | Stackelberg game + adaptive ε (ours) | FD + LDP | ✅ |
+| **Fixed-ε** | Fixed privacy budget ablation | FD + LDP | ✅ |
+| **FedMD** | FD baseline, no privacy (Li & Wang, NeurIPS 2019) | FD | ✅ |
+| **FedAvg** | Parameter averaging (McMahan et al., 2017) | Param-Avg | ✅ |
+| **CSRA** | Reverse auction DPFL (Yang et al., TIFS 2024) | Param-Avg + DP | ✅ |
+| **FedGMKD** | GMM prototype KD + DAT (Zhang et al., 2024) | Prototype | ✅ |
 
 ## 💻 Hardware Requirements
 
