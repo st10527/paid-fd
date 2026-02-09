@@ -1,18 +1,27 @@
 """
-FedMD: Federated Model Distillation (Li & Wang, NeurIPS 2019)
+FD (No Privacy) — Adapted from FedMD (Li & Wang, NeurIPS 2019)
 
-Classic federated distillation baseline.
-Same distillation framework as PAID-FD but WITHOUT:
+Noise-free federated distillation baseline for fair PAID-FD comparison.
+Uses the **same logit-space distillation pipeline** as PAID-FD but WITHOUT:
   - Stackelberg game / pricing
-  - Local Differential Privacy (no noise)
-  - Adaptive participation / quality
+  - Local Differential Privacy (no noise on logits)
+  - Adaptive participation / quality weighting
 
-All devices participate equally, upload raw logits, simple average.
-This is the "upper bound" for FD with no privacy.
+All devices participate equally, upload raw clipped logits, simple average.
+This serves as the **performance upper bound** for federated distillation.
+
+Differences from the original FedMD paper:
+  - Homogeneous models (all ResNet-18) instead of heterogeneous architectures
+  - KL-divergence distillation loss (same as PAID-FD) instead of MAE regression
+  - Global server model (not per-device personalized weights)
+  - No transfer-learning pre-training phase on public data
+  - Local training before logit upload (not after alignment/digest)
+  These adaptations ensure the ONLY difference vs. PAID-FD is the
+  privacy mechanism and game-theoretic incentive, enabling clean ablation.
 
 Reference:
   Li & Wang, "FedMD: Heterogenous Federated Learning via Model
-  Distillation", NeurIPS 2019 Workshop
+  Distillation", NeurIPS 2019 Workshop on Federated Learning
 """
 
 import torch
@@ -49,16 +58,18 @@ class FedMDConfig:
 
 class FedMD(FederatedMethod):
     """
-    FedMD: Federated Model Distillation.
+    FD (No Privacy) — Adapted from FedMD.
 
-    Protocol per round:
-      1. Server broadcasts global model
-      2. All devices train locally on private data
-      3. All devices compute logits on public data (NO noise)
-      4. Server aggregates logits (simple average, equal weights)
-      5. Server distills aggregated knowledge into global model
+    Protocol per round (identical pipeline to PAID-FD, minus noise/game):
+      1. Server broadcasts global model to all devices
+      2. Each device trains locally on private data (local_epochs, SGD)
+      3. Each device computes clipped logits on public data — NO noise added
+      4. Server aggregates logits via simple equal-weight average
+      5. Server distills consensus (softmax with temperature T) into global
+         model using KL-divergence loss
 
-    Key: No privacy, no game, no incentive → pure FD performance upper bound.
+    This is the noise-free FD upper bound.
+    In the paper, refer to as "FD (No Privacy)" or "FedMD-adapted".
     """
 
     def __init__(
