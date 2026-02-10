@@ -340,9 +340,9 @@ def run_phase1_gamma(device: str, seeds: list, n_rounds: int, quick: bool = Fals
     print("Phase 1.1: Gamma Sensitivity Analysis")
     print("=" * 70)
     
-    gamma_values = [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000]
+    gamma_values = [100, 300, 500, 700, 1000]
     if quick:
-        gamma_values = [200, 500, 800]
+        gamma_values = [300, 700]
     
     results = {'phase': 'phase1_gamma', 'gamma_values': gamma_values, 'runs': {}}
     
@@ -382,9 +382,9 @@ def run_phase1_lambda(device: str, seeds: list, n_rounds: int, quick: bool = Fal
     best_gamma = _get_best_gamma()
     print(f"  Using best γ = {best_gamma} from Phase 1.1")
     
-    lambda_values = [0.01, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0]
+    lambda_values = [0.01, 0.1, 1.0, 5.0, 10.0]
     if quick:
-        lambda_values = [0.05, 0.5, 5.0]
+        lambda_values = [0.1, 5.0]
     
     results = {
         'phase': 'phase1_lambda', 'best_gamma': best_gamma,

@@ -23,7 +23,7 @@ training:
 # Sweep over lambda_mult values (log scale)
 sweep:
   parameter: heterogeneity.overrides.privacy_sensitivity.lambda_mult
-  values: [0.01, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0]
+  values: [0.01, 0.1, 1.0, 5.0, 10.0]
 
 paid_fd:
   gamma: null  # Will be set to best from phase1_gamma
