@@ -118,7 +118,7 @@ def run_single_experiment(
     """
     import torch
     from src.utils.seed import set_seed
-    from src.data.datasets import load_cifar100, load_stl10, create_synthetic_datasets
+    from src.data.datasets import load_cifar100_safe_split, create_synthetic_datasets
     from src.data.partition import DirichletPartitioner, create_client_loaders
     from src.devices.heterogeneity import HeterogeneityGenerator
     from src.models import get_model
@@ -136,13 +136,14 @@ def run_single_experiment(
         )
         targets = train_data.targets
     else:
-        train_data, test_data = load_cifar100(root='./data', download=True)
-        targets = train_data.targets
-        public_data = load_stl10(
-            root='./data', split='unlabeled',
-            n_samples=config.get('public_samples', 5000),
-            resize_to=32, seed=seed
+        # Use CIFAR-100 only (safe split: no data leakage)
+        from src.data.datasets import load_cifar100_safe_split
+        train_data, test_data, public_data = load_cifar100_safe_split(
+            root='./data',
+            n_public=config.get('public_samples', 5000),
+            seed=seed
         )
+        targets = train_data.targets
     
     partitioner = DirichletPartitioner(
         alpha=config.get('alpha', 0.5),
