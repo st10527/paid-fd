@@ -134,17 +134,18 @@ def run_single_experiment(
         train_data, test_data, public_data = create_synthetic_datasets(
             n_train=n_devices * 100, n_test=1000, n_public=2000, seed=seed
         )
-        targets = train_data.targets
+        targets = np.array(train_data.targets)
     else:
         # Use CIFAR-100 only (safe split: no data leakage)
-        from src.data.datasets import load_cifar100_safe_split
-            train_data, public_data, test_data = load_cifar100_safe_split(
+        # Returns: (private_subset, public_subset, test_set)
+        train_data, public_data, test_data = load_cifar100_safe_split(
             root='./data',
             n_public=config.get('public_samples', 5000),
             seed=seed
         )
-            # train_data is a Subset, get targets from the underlying dataset
-            targets = train_data.dataset.targets[train_data.indices]
+        # train_data is a Subset — extract targets aligned to its 0-based indexing
+        all_targets = np.array(train_data.dataset.targets)
+        targets = all_targets[train_data.indices]
     
     partitioner = DirichletPartitioner(
         alpha=config.get('alpha', 0.5),
