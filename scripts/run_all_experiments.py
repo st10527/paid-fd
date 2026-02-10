@@ -138,12 +138,13 @@ def run_single_experiment(
     else:
         # Use CIFAR-100 only (safe split: no data leakage)
         from src.data.datasets import load_cifar100_safe_split
-        train_data, test_data, public_data = load_cifar100_safe_split(
+            train_data, public_data, test_data = load_cifar100_safe_split(
             root='./data',
             n_public=config.get('public_samples', 5000),
             seed=seed
         )
-        targets = train_data.targets
+            # train_data is a Subset, get targets from the underlying dataset
+            targets = train_data.dataset.targets[train_data.indices]
     
     partitioner = DirichletPartitioner(
         alpha=config.get('alpha', 0.5),
