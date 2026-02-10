@@ -1,0 +1,53 @@
+# Phase 5: Heterogeneity Impact Analysis
+# Purpose: Show PAID-FD is robust to different heterogeneity levels
+name: phase5_heterogeneity
+description: "Impact of device heterogeneity on performance"
+
+_base_: ../default.yaml
+
+system:
+  n_devices: 50
+  seed: 42
+
+training:
+  n_rounds: 50
+  eval_every: 1
+  local_epochs: 20
+  local_lr: 0.1
+  local_momentum: 0.9
+  local_batch_size: 32
+  distill_epochs: 10
+  distill_lr: 0.005
+  temperature: 3.0
+
+# Heterogeneity levels to compare
+heterogeneity_levels:
+  Homogeneous:
+    c_inf_multipliers: [1.0, 1.0, 1.0]  # All same
+  Mild:
+    c_inf_multipliers: [0.8, 1.0, 1.2]
+  Strong:
+    c_inf_multipliers: [0.5, 1.0, 2.0]  # Default
+  Extreme:
+    c_inf_multipliers: [0.2, 1.0, 5.0]
+
+methods:
+  - PAID-FD
+  - FedMD
+  - Fixed-eps-5.0
+
+paid_fd:
+  gamma: null  # from phase1
+  delta: 0.01
+  budget: inf
+  clip_bound: 5.0
+  public_samples_per_round: 1000
+
+heterogeneity:
+  config_file: config/devices/heterogeneity.yaml
+
+seeds: [42, 123, 456]
+
+output:
+  figure: fig9_heterogeneity_impact
+  type: grouped_bar

@@ -1,0 +1,933 @@
+#!/usr/bin/env python3
+"""
+PAID-FD Unified Experiment Runner (Figure-Oriented)
+====================================================
+
+Master script that runs all 7 phases of experiments and generates
+all 11 figures + 1 table for the TMC paper.
+
+Usage:
+    # Run all phases
+    python scripts/run_all_experiments.py --all
+    
+    # Run specific phase
+    python scripts/run_all_experiments.py --phase 1.1
+    python scripts/run_all_experiments.py --phase 2
+    
+    # Quick test (synthetic data, fewer rounds)
+    python scripts/run_all_experiments.py --phase 1.1 --quick
+    
+    # Specify device
+    python scripts/run_all_experiments.py --all --device cuda:0
+    
+    # Skip phases that already have results
+    python scripts/run_all_experiments.py --all --skip-existing
+"""
+
+import argparse
+import json
+import os
+import sys
+import time
+import copy
+from pathlib import Path
+from datetime import datetime
+from typing import Dict, List, Any, Optional, Tuple
+
+# Setup paths
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+os.chdir(PROJECT_ROOT)
+
+import yaml
+import numpy as np
+
+# ============================================================================
+# Utility Functions
+# ============================================================================
+
+def load_yaml(path: str) -> dict:
+    with open(path, 'r') as f:
+        return yaml.safe_load(f)
+
+
+def save_json(data: dict, path: str):
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    
+    class NumpyEncoder(json.JSONEncoder):
+        def default(self, obj):
+            if isinstance(obj, (np.integer,)):
+                return int(obj)
+            elif isinstance(obj, (np.floating,)):
+                return float(obj)
+            elif isinstance(obj, np.ndarray):
+                return obj.tolist()
+            return super().default(obj)
+    
+    with open(path, 'w') as f:
+        json.dump(data, f, indent=2, cls=NumpyEncoder)
+    print(f"  💾 Saved: {path}")
+
+
+def load_json(path: str) -> dict:
+    with open(path, 'r') as f:
+        return json.load(f)
+
+
+def result_path(phase: str) -> str:
+    return str(PROJECT_ROOT / "results" / "experiments" / f"{phase}.json")
+
+
+def result_exists(phase: str) -> bool:
+    return Path(result_path(phase)).exists()
+
+
+def get_device(device_arg: str) -> str:
+    import torch
+    if device_arg == 'auto':
+        return 'cuda' if torch.cuda.is_available() else 'cpu'
+    return device_arg
+
+
+def setup_seed(seed: int):
+    from src.utils.seed import set_seed
+    set_seed(seed)
+
+
+# ============================================================================
+# Core Training Loop (shared across all phases)
+# ============================================================================
+
+def run_single_experiment(
+    method_name: str,
+    config: dict,
+    seed: int,
+    device: str,
+    n_rounds: int = 50,
+    save_decisions: bool = False,
+    verbose: bool = True
+) -> dict:
+    """
+    Run a single experiment with given method and config.
+    
+    Returns:
+        dict with keys: accuracies, losses, participation_rates, 
+                        prices, avg_eps_list, avg_s_list, 
+                        device_decisions (if save_decisions),
+                        energy_history, elapsed_sec, extras
+    """
+    import torch
+    from src.utils.seed import set_seed
+    from src.data.datasets import load_cifar100, load_stl10, create_synthetic_datasets
+    from src.data.partition import DirichletPartitioner, create_client_loaders
+    from src.devices.heterogeneity import HeterogeneityGenerator
+    from src.models import get_model
+    from torch.utils.data import DataLoader
+    
+    set_seed(seed)
+    
+    n_devices = config.get('n_devices', 50)
+    synthetic = config.get('synthetic', False)
+    
+    # ---- Data ----
+    if synthetic:
+        train_data, test_data, public_data = create_synthetic_datasets(
+            n_train=n_devices * 100, n_test=1000, n_public=2000, seed=seed
+        )
+        targets = train_data.targets
+    else:
+        train_data, test_data = load_cifar100(root='./data', download=True)
+        targets = train_data.targets
+        public_data = load_stl10(
+            root='./data', split='unlabeled',
+            n_samples=config.get('public_samples', 5000),
+            resize_to=32, seed=seed
+        )
+    
+    partitioner = DirichletPartitioner(
+        alpha=config.get('alpha', 0.5),
+        n_clients=n_devices,
+        min_samples_per_client=10,
+        seed=seed
+    )
+    client_indices = partitioner.partition(train_data, targets)
+    client_loaders = create_client_loaders(train_data, client_indices, batch_size=32)
+    test_loader = DataLoader(test_data, batch_size=128, shuffle=False)
+    public_loader = DataLoader(public_data, batch_size=32, shuffle=False)
+    
+    # ---- Devices ----
+    het_config = config.get('heterogeneity', {})
+    generator = HeterogeneityGenerator(
+        n_devices=n_devices,
+        config_path=het_config.get('config_file', 'config/devices/heterogeneity.yaml'),
+        config_override=het_config.get('overrides', None),
+        seed=seed
+    )
+    devices = generator.generate()
+    
+    for dev in devices:
+        if dev.device_id in client_indices:
+            dev.data_size = len(client_indices[dev.device_id])
+    
+    # ---- Method ----
+    model = get_model(config.get('model', 'resnet18'), num_classes=100)
+    method = _create_method(method_name, model, config, device)
+    
+    # ---- Training loop ----
+    accuracies = []
+    losses = []
+    participation_rates = []
+    prices = []
+    avg_eps_list = []
+    avg_s_list = []
+    device_decisions_history = []
+    energy_history = []
+    extras_history = []
+    
+    start_time = time.time()
+    
+    for r in range(n_rounds):
+        result = method.run_round(
+            round_idx=r,
+            devices=devices,
+            client_loaders=client_loaders,
+            public_loader=public_loader,
+            test_loader=test_loader
+        )
+        
+        accuracies.append(result.accuracy)
+        losses.append(result.loss)
+        participation_rates.append(result.participation_rate)
+        energy_history.append(result.energy)
+        
+        extra = result.extra or {}
+        extras_history.append(extra)
+        prices.append(extra.get('price', 0))
+        avg_eps_list.append(extra.get('avg_eps', 0))
+        avg_s_list.append(extra.get('avg_s', 0))
+        
+        if verbose and (r % 10 == 0 or r == n_rounds - 1):
+            print(f"    Round {r:3d}/{n_rounds}: acc={result.accuracy:.4f}, "
+                  f"loss={result.loss:.4f}, part={result.participation_rate:.2f}")
+    
+    elapsed = time.time() - start_time
+    
+    return {
+        'method': method_name,
+        'seed': seed,
+        'n_rounds': n_rounds,
+        'accuracies': accuracies,
+        'losses': losses,
+        'participation_rates': participation_rates,
+        'prices': prices,
+        'avg_eps': avg_eps_list,
+        'avg_s': avg_s_list,
+        'energy_history': energy_history,
+        'extras': extras_history,
+        'final_accuracy': accuracies[-1] if accuracies else 0,
+        'best_accuracy': max(accuracies) if accuracies else 0,
+        'elapsed_sec': elapsed,
+        'config': {k: v for k, v in config.items() 
+                   if k not in ['heterogeneity']}  # avoid serializing large objects
+    }
+
+
+def _create_method(method_name: str, model, config: dict, device: str):
+    """Create a method instance from name and config."""
+    from src.methods import (PAIDFD, FixedEpsilon, FedAvg, FedMD, FedGMKD, CSRA)
+    from src.methods.paid_fd import PAIDFDConfig
+    from src.methods.fixed_eps import FixedEpsilonConfig
+    from src.methods.fedavg import FedAvgConfig
+    from src.methods.fedmd import FedMDConfig
+    from src.methods.fedgmkd import FedGMKDConfig
+    from src.methods.csra import CSRAConfig
+    from src.models.utils import copy_model
+    
+    mc = config.get('method_config', {})
+    tc = config  # training config is at top level
+    
+    local_epochs = tc.get('local_epochs', 20)
+    local_lr = tc.get('local_lr', 0.1)
+    distill_epochs = tc.get('distill_epochs', 10)
+    distill_lr = tc.get('distill_lr', 0.005)
+    temperature = tc.get('temperature', 3.0)
+    
+    m = copy_model(model, device=device)
+    
+    if method_name == 'PAID-FD':
+        cfg = PAIDFDConfig(
+            gamma=mc.get('gamma', tc.get('gamma', 500.0)),
+            delta=mc.get('delta', 0.01),
+            budget=float(mc.get('budget', 'inf')),
+            local_epochs=local_epochs,
+            local_lr=local_lr,
+            local_momentum=tc.get('local_momentum', 0.9),
+            distill_epochs=distill_epochs,
+            distill_lr=distill_lr,
+            temperature=temperature,
+            clip_bound=mc.get('clip_bound', 5.0),
+            public_samples=mc.get('public_samples_per_round', 1000),
+        )
+        return PAIDFD(m, cfg, 100, device)
+    
+    elif method_name.startswith('Fixed-eps'):
+        eps = float(method_name.split('-')[-1])
+        cfg = FixedEpsilonConfig(
+            epsilon=eps,
+            local_epochs=local_epochs,
+            local_lr=local_lr,
+            distill_epochs=distill_epochs,
+            distill_lr=distill_lr,
+            temperature=temperature,
+            clip_bound=5.0,
+            participation_rate=mc.get('participation_rate', 1.0),
+            samples_per_device=mc.get('samples_per_device', 100),
+        )
+        return FixedEpsilon(m, cfg, 100, device)
+    
+    elif method_name == 'FedAvg':
+        cfg = FedAvgConfig(
+            local_epochs=mc.get('local_epochs', 5),
+            local_lr=mc.get('local_lr', 0.01),
+            local_momentum=tc.get('local_momentum', 0.9),
+            participation_rate=mc.get('participation_rate', 0.5),
+        )
+        return FedAvg(m, cfg, 100, device)
+    
+    elif method_name == 'FedMD':
+        cfg = FedMDConfig(
+            local_epochs=local_epochs,
+            local_lr=local_lr,
+            distill_epochs=distill_epochs,
+            distill_lr=distill_lr,
+            temperature=temperature,
+            clip_bound=5.0,
+        )
+        return FedMD(m, cfg, 100, device)
+    
+    elif method_name == 'FedGMKD':
+        cfg = FedGMKDConfig(
+            alpha=mc.get('alpha', 0.1),
+            beta=mc.get('beta', 1.0),
+            tau=mc.get('tau', 0.5),
+            participation_rate=mc.get('participation_rate', 0.5),
+            local_epochs=mc.get('local_epochs', 5),
+            local_lr=mc.get('local_lr', 0.01),
+        )
+        return FedGMKD(m, cfg, 100, device)
+    
+    elif method_name == 'CSRA':
+        cfg = CSRAConfig(
+            budget=mc.get('budget', 100.0),
+            epsilon_menu=mc.get('epsilon_menu', [0.5, 1.0, 2.0, 5.0, 10.0]),
+            participation_rate=mc.get('participation_rate', 0.5),
+            local_epochs=mc.get('local_epochs', 5),
+            local_lr=mc.get('local_lr', 0.01),
+        )
+        return CSRA(m, cfg, 100, device)
+    
+    else:
+        raise ValueError(f"Unknown method: {method_name}")
+
+
+# ============================================================================
+# Phase Runners
+# ============================================================================
+
+def run_phase1_gamma(device: str, seeds: list, n_rounds: int, quick: bool = False):
+    """Phase 1.1: Gamma sensitivity analysis."""
+    print("\n" + "=" * 70)
+    print("Phase 1.1: Gamma Sensitivity Analysis")
+    print("=" * 70)
+    
+    gamma_values = [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000]
+    if quick:
+        gamma_values = [200, 500, 800]
+    
+    results = {'phase': 'phase1_gamma', 'gamma_values': gamma_values, 'runs': {}}
+    
+    for gamma in gamma_values:
+        print(f"\n--- Gamma = {gamma} ---")
+        runs = []
+        for seed in seeds:
+            print(f"  Seed {seed}:")
+            config = {
+                'n_devices': 50, 'gamma': gamma, 'alpha': 0.5,
+                'local_epochs': 20, 'local_lr': 0.1, 'local_momentum': 0.9,
+                'distill_epochs': 10, 'distill_lr': 0.005, 'temperature': 3.0,
+                'synthetic': quick,
+                'heterogeneity': {
+                    'config_file': 'config/devices/heterogeneity.yaml',
+                    'overrides': {
+                        'privacy_sensitivity': {'lambda_mult': 0.1}
+                    }
+                },
+                'method_config': {'gamma': gamma, 'delta': 0.01}
+            }
+            run = run_single_experiment('PAID-FD', config, seed, device, n_rounds)
+            runs.append(run)
+        results['runs'][str(gamma)] = runs
+    
+    save_json(results, result_path('phase1_gamma'))
+    return results
+
+
+def run_phase1_lambda(device: str, seeds: list, n_rounds: int, quick: bool = False):
+    """Phase 1.2: Lambda sensitivity analysis."""
+    print("\n" + "=" * 70)
+    print("Phase 1.2: Lambda Sensitivity Analysis")
+    print("=" * 70)
+    
+    # Load best gamma from phase 1.1
+    best_gamma = _get_best_gamma()
+    print(f"  Using best γ = {best_gamma} from Phase 1.1")
+    
+    lambda_values = [0.01, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0]
+    if quick:
+        lambda_values = [0.05, 0.5, 5.0]
+    
+    results = {
+        'phase': 'phase1_lambda', 'best_gamma': best_gamma,
+        'lambda_values': lambda_values, 'runs': {}
+    }
+    
+    for lam in lambda_values:
+        print(f"\n--- Lambda_mult = {lam} ---")
+        runs = []
+        for seed in seeds:
+            print(f"  Seed {seed}:")
+            config = {
+                'n_devices': 50, 'gamma': best_gamma, 'alpha': 0.5,
+                'local_epochs': 20, 'local_lr': 0.1, 'local_momentum': 0.9,
+                'distill_epochs': 10, 'distill_lr': 0.005, 'temperature': 3.0,
+                'synthetic': quick,
+                'heterogeneity': {
+                    'config_file': 'config/devices/heterogeneity.yaml',
+                    'overrides': {
+                        'privacy_sensitivity': {'lambda_mult': lam}
+                    }
+                },
+                'method_config': {'gamma': best_gamma, 'delta': 0.01}
+            }
+            run = run_single_experiment('PAID-FD', config, seed, device, n_rounds)
+            runs.append(run)
+        results['runs'][str(lam)] = runs
+    
+    save_json(results, result_path('phase1_lambda'))
+    return results
+
+
+def run_phase2(device: str, seeds: list, n_rounds: int, quick: bool = False):
+    """Phase 2: Convergence & Performance Comparison."""
+    print("\n" + "=" * 70)
+    print("Phase 2: Convergence & Performance Comparison")
+    print("=" * 70)
+    
+    best_gamma = _get_best_gamma()
+    print(f"  Using best γ = {best_gamma}")
+    
+    methods = [
+        'PAID-FD', 'FedAvg', 'FedMD', 'FedGMKD', 'CSRA',
+        'Fixed-eps-1.0', 'Fixed-eps-5.0', 'Fixed-eps-10.0'
+    ]
+    if quick:
+        methods = ['PAID-FD', 'FedAvg', 'FedMD', 'Fixed-eps-5.0']
+    
+    method_configs = {
+        'PAID-FD': {'gamma': best_gamma, 'delta': 0.01},
+        'FedAvg': {'participation_rate': 0.5, 'local_epochs': 5, 'local_lr': 0.01},
+        'FedMD': {},
+        'FedGMKD': {
+            'alpha': 0.1, 'beta': 1.0, 'tau': 0.5,
+            'participation_rate': 0.5, 'local_epochs': 5, 'local_lr': 0.01
+        },
+        'CSRA': {
+            'budget': 100.0,
+            'epsilon_menu': [0.5, 1.0, 2.0, 5.0, 10.0],
+            'participation_rate': 0.5, 'local_epochs': 5, 'local_lr': 0.01
+        },
+        'Fixed-eps-1.0': {'participation_rate': 1.0},
+        'Fixed-eps-5.0': {'participation_rate': 1.0},
+        'Fixed-eps-10.0': {'participation_rate': 1.0},
+    }
+    
+    results = {
+        'phase': 'phase2_convergence', 'best_gamma': best_gamma,
+        'methods': methods, 'runs': {}
+    }
+    
+    for method_name in methods:
+        print(f"\n--- Method: {method_name} ---")
+        runs = []
+        for seed in seeds:
+            print(f"  Seed {seed}:")
+            config = {
+                'n_devices': 50, 'gamma': best_gamma, 'alpha': 0.5,
+                'local_epochs': 20, 'local_lr': 0.1, 'local_momentum': 0.9,
+                'distill_epochs': 10, 'distill_lr': 0.005, 'temperature': 3.0,
+                'synthetic': quick,
+                'heterogeneity': {
+                    'config_file': 'config/devices/heterogeneity.yaml',
+                },
+                'method_config': method_configs.get(method_name, {})
+            }
+            run = run_single_experiment(method_name, config, seed, device, n_rounds)
+            runs.append(run)
+        results['runs'][method_name] = runs
+    
+    save_json(results, result_path('phase2_convergence'))
+    return results
+
+
+def run_phase3(device: str, seeds: list, n_rounds: int, quick: bool = False):
+    """Phase 3: Privacy-Accuracy Tradeoff."""
+    print("\n" + "=" * 70)
+    print("Phase 3: Privacy-Accuracy Tradeoff")
+    print("=" * 70)
+    
+    best_gamma = _get_best_gamma()
+    
+    fixed_eps_values = [0.5, 1.0, 2.0, 5.0, 10.0, 20.0]
+    paid_fd_lambda_values = [0.01, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0]
+    if quick:
+        fixed_eps_values = [1.0, 5.0, 10.0]
+        paid_fd_lambda_values = [0.1, 1.0, 10.0]
+    
+    results = {
+        'phase': 'phase3_privacy', 'best_gamma': best_gamma,
+        'fixed_eps_values': fixed_eps_values,
+        'paid_fd_lambda_values': paid_fd_lambda_values,
+        'fixed_eps_runs': {},
+        'paid_fd_runs': {}
+    }
+    
+    # Fixed-ε experiments
+    for eps in fixed_eps_values:
+        method_name = f'Fixed-eps-{eps}'
+        print(f"\n--- {method_name} ---")
+        runs = []
+        for seed in seeds:
+            print(f"  Seed {seed}:")
+            config = {
+                'n_devices': 50, 'alpha': 0.5,
+                'local_epochs': 20, 'local_lr': 0.1, 'local_momentum': 0.9,
+                'distill_epochs': 10, 'distill_lr': 0.005, 'temperature': 3.0,
+                'synthetic': quick,
+                'heterogeneity': {
+                    'config_file': 'config/devices/heterogeneity.yaml',
+                },
+                'method_config': {'participation_rate': 1.0}
+            }
+            run = run_single_experiment(method_name, config, seed, device, n_rounds)
+            runs.append(run)
+        results['fixed_eps_runs'][str(eps)] = runs
+    
+    # PAID-FD with varying λ
+    for lam in paid_fd_lambda_values:
+        print(f"\n--- PAID-FD λ_mult={lam} ---")
+        runs = []
+        for seed in seeds:
+            print(f"  Seed {seed}:")
+            config = {
+                'n_devices': 50, 'gamma': best_gamma, 'alpha': 0.5,
+                'local_epochs': 20, 'local_lr': 0.1, 'local_momentum': 0.9,
+                'distill_epochs': 10, 'distill_lr': 0.005, 'temperature': 3.0,
+                'synthetic': quick,
+                'heterogeneity': {
+                    'config_file': 'config/devices/heterogeneity.yaml',
+                    'overrides': {
+                        'privacy_sensitivity': {'lambda_mult': lam}
+                    }
+                },
+                'method_config': {'gamma': best_gamma, 'delta': 0.01}
+            }
+            run = run_single_experiment('PAID-FD', config, seed, device, n_rounds)
+            runs.append(run)
+        results['paid_fd_runs'][str(lam)] = runs
+    
+    save_json(results, result_path('phase3_privacy'))
+    return results
+
+
+def run_phase4(device: str, seeds: list, n_rounds: int, quick: bool = False):
+    """Phase 4: Incentive Mechanism Analysis."""
+    print("\n" + "=" * 70)
+    print("Phase 4: Incentive Mechanism Analysis")
+    print("=" * 70)
+    
+    best_gamma = _get_best_gamma()
+    
+    results = {
+        'phase': 'phase4_incentive', 'best_gamma': best_gamma,
+        'runs': []
+    }
+    
+    for seed in seeds:
+        print(f"\n  Seed {seed}:")
+        config = {
+            'n_devices': 50, 'gamma': best_gamma, 'alpha': 0.5,
+            'local_epochs': 20, 'local_lr': 0.1, 'local_momentum': 0.9,
+            'distill_epochs': 10, 'distill_lr': 0.005, 'temperature': 3.0,
+            'synthetic': quick,
+            'heterogeneity': {
+                'config_file': 'config/devices/heterogeneity.yaml',
+            },
+            'method_config': {'gamma': best_gamma, 'delta': 0.01}
+        }
+        run = run_single_experiment('PAID-FD', config, seed, device, n_rounds,
+                                     save_decisions=True)
+        results['runs'].append(run)
+    
+    save_json(results, result_path('phase4_incentive'))
+    return results
+
+
+def run_phase5(device: str, seeds: list, n_rounds: int, quick: bool = False):
+    """Phase 5: Heterogeneity Impact Analysis."""
+    print("\n" + "=" * 70)
+    print("Phase 5: Heterogeneity Impact Analysis")
+    print("=" * 70)
+    
+    best_gamma = _get_best_gamma()
+    
+    het_levels = {
+        'Homogeneous': [1.0, 1.0, 1.0],
+        'Mild': [0.8, 1.0, 1.2],
+        'Strong': [0.5, 1.0, 2.0],
+        'Extreme': [0.2, 1.0, 5.0],
+    }
+    if quick:
+        het_levels = {'Homogeneous': [1.0, 1.0, 1.0], 'Strong': [0.5, 1.0, 2.0]}
+    
+    methods = ['PAID-FD', 'FedMD', 'Fixed-eps-5.0']
+    if quick:
+        methods = ['PAID-FD', 'FedMD']
+    
+    method_configs = {
+        'PAID-FD': {'gamma': best_gamma, 'delta': 0.01},
+        'FedMD': {},
+        'Fixed-eps-5.0': {'participation_rate': 1.0},
+    }
+    
+    results = {
+        'phase': 'phase5_heterogeneity', 'best_gamma': best_gamma,
+        'het_levels': {k: v for k, v in het_levels.items()},
+        'methods': methods, 'runs': {}
+    }
+    
+    for level_name, multipliers in het_levels.items():
+        results['runs'][level_name] = {}
+        for method_name in methods:
+            print(f"\n--- {level_name} / {method_name} ---")
+            runs = []
+            for seed in seeds:
+                print(f"  Seed {seed}:")
+                config = {
+                    'n_devices': 50, 'gamma': best_gamma, 'alpha': 0.5,
+                    'local_epochs': 20, 'local_lr': 0.1, 'local_momentum': 0.9,
+                    'distill_epochs': 10, 'distill_lr': 0.005, 'temperature': 3.0,
+                    'synthetic': quick,
+                    'heterogeneity': {
+                        'config_file': 'config/devices/heterogeneity.yaml',
+                        'overrides': {
+                            'cost_parameters': {
+                                'c_inf_multipliers': multipliers
+                            }
+                        }
+                    },
+                    'method_config': method_configs.get(method_name, {})
+                }
+                run = run_single_experiment(method_name, config, seed, device, n_rounds)
+                runs.append(run)
+            results['runs'][level_name][method_name] = runs
+    
+    save_json(results, result_path('phase5_heterogeneity'))
+    return results
+
+
+def run_phase6(device: str, seeds: list, n_rounds: int, quick: bool = False):
+    """Phase 6: Scalability Analysis."""
+    print("\n" + "=" * 70)
+    print("Phase 6: Scalability Analysis")
+    print("=" * 70)
+    
+    best_gamma = _get_best_gamma()
+    
+    n_devices_list = [10, 20, 30, 50, 70, 100]
+    if quick:
+        n_devices_list = [10, 30, 50]
+    
+    methods = ['PAID-FD', 'FedMD', 'Fixed-eps-5.0']
+    if quick:
+        methods = ['PAID-FD', 'FedMD']
+    
+    method_configs = {
+        'PAID-FD': {'gamma': best_gamma, 'delta': 0.01},
+        'FedMD': {},
+        'Fixed-eps-5.0': {'participation_rate': 1.0},
+    }
+    
+    results = {
+        'phase': 'phase6_scalability', 'best_gamma': best_gamma,
+        'n_devices_list': n_devices_list, 'methods': methods, 'runs': {}
+    }
+    
+    for n_dev in n_devices_list:
+        results['runs'][str(n_dev)] = {}
+        for method_name in methods:
+            print(f"\n--- N={n_dev} / {method_name} ---")
+            runs = []
+            for seed in seeds:
+                print(f"  Seed {seed}:")
+                config = {
+                    'n_devices': n_dev, 'gamma': best_gamma, 'alpha': 0.5,
+                    'local_epochs': 20, 'local_lr': 0.1, 'local_momentum': 0.9,
+                    'distill_epochs': 10, 'distill_lr': 0.005, 'temperature': 3.0,
+                    'synthetic': quick,
+                    'heterogeneity': {
+                        'config_file': 'config/devices/heterogeneity.yaml',
+                    },
+                    'method_config': method_configs.get(method_name, {})
+                }
+                run = run_single_experiment(method_name, config, seed, device, n_rounds)
+                runs.append(run)
+            results['runs'][str(n_dev)][method_name] = runs
+    
+    save_json(results, result_path('phase6_scalability'))
+    return results
+
+
+def run_phase7(device: str, seeds: list, n_rounds: int, quick: bool = False):
+    """Phase 7: Ablation Study."""
+    print("\n" + "=" * 70)
+    print("Phase 7: Ablation Study")
+    print("=" * 70)
+    
+    best_gamma = _get_best_gamma()
+    
+    # Full PAID-FD
+    variants = {
+        'PAID-FD (Full)': {
+            'method': 'PAID-FD',
+            'config': {'gamma': best_gamma, 'delta': 0.01}
+        },
+        'w/o Adaptive ε': {
+            'method': 'Fixed-eps-5.0',
+            'config': {'participation_rate': 1.0}
+        },
+        'w/o Price (fixed p)': {
+            'method': 'PAID-FD',
+            'config': {'gamma': best_gamma, 'delta': 0.01, 'fixed_price': 0.5}
+        },
+        'w/o Game (random)': {
+            'method': 'FedMD',  # FedMD = all participate, no game, no privacy
+            'config': {}
+        },
+    }
+    if quick:
+        variants = {
+            'PAID-FD (Full)': variants['PAID-FD (Full)'],
+            'w/o Adaptive ε': variants['w/o Adaptive ε'],
+        }
+    
+    results = {
+        'phase': 'phase7_ablation', 'best_gamma': best_gamma,
+        'variants': list(variants.keys()), 'runs': {}
+    }
+    
+    for variant_name, spec in variants.items():
+        print(f"\n--- {variant_name} ---")
+        runs = []
+        for seed in seeds:
+            print(f"  Seed {seed}:")
+            config = {
+                'n_devices': 50, 'gamma': best_gamma, 'alpha': 0.5,
+                'local_epochs': 20, 'local_lr': 0.1, 'local_momentum': 0.9,
+                'distill_epochs': 10, 'distill_lr': 0.005, 'temperature': 3.0,
+                'synthetic': quick,
+                'heterogeneity': {
+                    'config_file': 'config/devices/heterogeneity.yaml',
+                },
+                'method_config': spec['config']
+            }
+            run = run_single_experiment(spec['method'], config, seed, device, n_rounds)
+            runs.append(run)
+        results['runs'][variant_name] = runs
+    
+    save_json(results, result_path('phase7_ablation'))
+    return results
+
+
+# ============================================================================
+# Helper: Get best gamma from Phase 1.1 results
+# ============================================================================
+
+def _get_best_gamma(default: float = 500.0) -> float:
+    """Load best gamma from phase 1.1 results, or return default."""
+    path = result_path('phase1_gamma')
+    if not Path(path).exists():
+        print(f"  ⚠️  Phase 1.1 results not found. Using default γ={default}")
+        return default
+    
+    data = load_json(path)
+    best_gamma = default
+    best_acc = 0.0
+    
+    for gamma_str, runs in data.get('runs', {}).items():
+        # Average final accuracy across seeds
+        accs = [r['final_accuracy'] for r in runs]
+        avg_acc = np.mean(accs)
+        if avg_acc > best_acc:
+            best_acc = avg_acc
+            best_gamma = float(gamma_str)
+    
+    print(f"  ✓ Best γ = {best_gamma} (avg acc = {best_acc:.4f})")
+    return best_gamma
+
+
+def _get_best_lambda(default: float = 0.1) -> float:
+    """Load best lambda from phase 1.2 results, or return default."""
+    path = result_path('phase1_lambda')
+    if not Path(path).exists():
+        return default
+    
+    data = load_json(path)
+    best_lam = default
+    best_acc = 0.0
+    
+    for lam_str, runs in data.get('runs', {}).items():
+        accs = [r['final_accuracy'] for r in runs]
+        avg_acc = np.mean(accs)
+        if avg_acc > best_acc:
+            best_acc = avg_acc
+            best_lam = float(lam_str)
+    
+    return best_lam
+
+
+# ============================================================================
+# Phase Registry
+# ============================================================================
+
+PHASES = {
+    '1.1': ('Phase 1.1: Gamma Sensitivity', run_phase1_gamma),
+    '1.2': ('Phase 1.2: Lambda Sensitivity', run_phase1_lambda),
+    '2':   ('Phase 2: Convergence & Performance', run_phase2),
+    '3':   ('Phase 3: Privacy-Accuracy Tradeoff', run_phase3),
+    '4':   ('Phase 4: Incentive Mechanism', run_phase4),
+    '5':   ('Phase 5: Heterogeneity Impact', run_phase5),
+    '6':   ('Phase 6: Scalability', run_phase6),
+    '7':   ('Phase 7: Ablation Study', run_phase7),
+}
+
+PHASE_ORDER = ['1.1', '1.2', '2', '3', '4', '5', '6', '7']
+
+PHASE_RESULT_FILES = {
+    '1.1': 'phase1_gamma',
+    '1.2': 'phase1_lambda',
+    '2':   'phase2_convergence',
+    '3':   'phase3_privacy',
+    '4':   'phase4_incentive',
+    '5':   'phase5_heterogeneity',
+    '6':   'phase6_scalability',
+    '7':   'phase7_ablation',
+}
+
+
+# ============================================================================
+# Main
+# ============================================================================
+
+def main():
+    parser = argparse.ArgumentParser(
+        description='PAID-FD Complete Experiment Runner',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python scripts/run_all_experiments.py --phase 1.1              # Run Phase 1.1 only
+  python scripts/run_all_experiments.py --phase 1.1 --quick      # Quick test
+  python scripts/run_all_experiments.py --all                    # Run all phases
+  python scripts/run_all_experiments.py --all --skip-existing    # Skip completed
+  python scripts/run_all_experiments.py --phase 2 --device cuda:0
+  python scripts/run_all_experiments.py --phase 1.1 --seeds 42 123 456
+        """
+    )
+    parser.add_argument('--phase', type=str, default=None,
+                       help='Phase to run (1.1, 1.2, 2, 3, 4, 5, 6, 7)')
+    parser.add_argument('--all', action='store_true',
+                       help='Run all phases in order')
+    parser.add_argument('--quick', action='store_true',
+                       help='Quick test mode (synthetic data, fewer configs)')
+    parser.add_argument('--device', type=str, default='auto',
+                       help='Device (cuda/cpu/auto)')
+    parser.add_argument('--rounds', type=int, default=50,
+                       help='Number of rounds per experiment (default: 50)')
+    parser.add_argument('--seeds', type=int, nargs='+', default=[42, 123, 456],
+                       help='Random seeds (default: 42 123 456)')
+    parser.add_argument('--skip-existing', action='store_true',
+                       help='Skip phases that already have results')
+    parser.add_argument('--list', action='store_true',
+                       help='List all phases and their status')
+    args = parser.parse_args()
+    
+    device = get_device(args.device)
+    print(f"🖥️  Device: {device}")
+    print(f"🎲 Seeds: {args.seeds}")
+    print(f"🔄 Rounds: {args.rounds}")
+    if args.quick:
+        print("⚡ Quick mode: synthetic data, reduced configs")
+    
+    if args.list:
+        print("\n📋 Phase Status:")
+        for pid in PHASE_ORDER:
+            name, _ = PHASES[pid]
+            exists = result_exists(PHASE_RESULT_FILES[pid])
+            status = "✅ Done" if exists else "⬜ Pending"
+            print(f"  {pid}: {name} [{status}]")
+        return
+    
+    if not args.phase and not args.all:
+        parser.print_help()
+        return
+    
+    # Determine phases to run
+    if args.all:
+        phases_to_run = PHASE_ORDER
+    else:
+        if args.phase not in PHASES:
+            print(f"❌ Unknown phase: {args.phase}")
+            print(f"   Available: {', '.join(PHASE_ORDER)}")
+            return
+        phases_to_run = [args.phase]
+    
+    # Run phases
+    total_start = time.time()
+    
+    for pid in phases_to_run:
+        name, runner = PHASES[pid]
+        
+        if args.skip_existing and result_exists(PHASE_RESULT_FILES[pid]):
+            print(f"\n⏭️  Skipping {name} (results exist)")
+            continue
+        
+        phase_start = time.time()
+        try:
+            runner(device, args.seeds, args.rounds, args.quick)
+            elapsed = time.time() - phase_start
+            print(f"\n✅ {name} completed in {elapsed:.0f}s")
+        except Exception as e:
+            elapsed = time.time() - phase_start
+            print(f"\n❌ {name} failed after {elapsed:.0f}s: {e}")
+            import traceback
+            traceback.print_exc()
+            if not args.all:
+                raise
+    
+    total_elapsed = time.time() - total_start
+    print(f"\n{'=' * 70}")
+    print(f"🏁 All done! Total time: {total_elapsed:.0f}s ({total_elapsed/60:.1f} min)")
+    print(f"{'=' * 70}")
+
+
+if __name__ == '__main__':
+    main()
