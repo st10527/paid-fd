@@ -347,7 +347,8 @@ def create_client_loaders(
                 client_subset,
                 batch_size=min(batch_size, len(actual_indices)),
                 shuffle=True,
-                drop_last=False
+                drop_last=False,
+                pin_memory=True
             )
         return client_loaders
     
@@ -368,7 +369,8 @@ def create_client_loaders(
             client_subset,
             batch_size=min(batch_size, len(indices)),
             shuffle=True,
-            drop_last=False
+            drop_last=False,
+            pin_memory=True
         )
     
     return client_loaders

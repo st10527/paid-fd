@@ -74,12 +74,115 @@ def load_json(path: str) -> dict:
         return json.load(f)
 
 
-def result_path(phase: str) -> str:
+def result_path(phase: str, seed: int = None) -> str:
+    """Get result file path. If seed is given, returns per-seed path for parallel runs."""
+    if seed is not None:
+        return str(PROJECT_ROOT / "results" / "experiments" / f"{phase}_seed{seed}.json")
     return str(PROJECT_ROOT / "results" / "experiments" / f"{phase}.json")
 
 
 def result_exists(phase: str) -> bool:
     return Path(result_path(phase)).exists()
+
+
+def save_phase_results(results: dict, phase: str, seeds: list):
+    """Save results. If single seed → per-seed file; if multi-seed → combined file."""
+    if len(seeds) == 1:
+        save_json(results, result_path(phase, seed=seeds[0]))
+    else:
+        save_json(results, result_path(phase))
+
+
+def merge_seed_results(phase: str, seeds: list):
+    """
+    Merge per-seed result files into a single combined result file.
+    
+    Per-seed files:  phase1_gamma_seed42.json, phase1_gamma_seed123.json, ...
+    Merged file:     phase1_gamma.json
+    """
+    print(f"\n🔀 Merging results for {phase}...")
+    
+    # Collect per-seed files
+    seed_files = []
+    for s in seeds:
+        p = result_path(phase, seed=s)
+        if Path(p).exists():
+            seed_files.append((s, p))
+            print(f"  Found: {Path(p).name}")
+        else:
+            print(f"  ⚠️  Missing: {Path(p).name}")
+    
+    if not seed_files:
+        print("  ❌ No seed files found, nothing to merge.")
+        return
+    
+    # Load first file as template
+    first_data = load_json(seed_files[0][1])
+    
+    # Merge strategy depends on phase structure
+    if 'runs' in first_data and isinstance(first_data['runs'], dict):
+        # Phase 1.1, 1.2, 2, 3, 5, 6, 7 style: runs[key] = [list of seed runs]
+        merged = copy.deepcopy(first_data)
+        
+        # Check if runs values are lists of run-dicts (multi-key like gamma/method)
+        sample_val = next(iter(merged['runs'].values()))
+        
+        if isinstance(sample_val, list) and len(sample_val) > 0 and isinstance(sample_val[0], dict):
+            # runs[key] = [run_dict, ...] — one per seed in original format
+            # In per-seed files, each key has exactly 1 run. Merge = concatenate.
+            for seed_val, path in seed_files[1:]:
+                other = load_json(path)
+                for key in other.get('runs', {}):
+                    if key in merged['runs']:
+                        merged['runs'][key].extend(other['runs'][key])
+                    else:
+                        merged['runs'][key] = other['runs'][key]
+        elif isinstance(sample_val, dict):
+            # Nested dict like phase5: runs[level][method] = [runs]
+            for seed_val, path in seed_files[1:]:
+                other = load_json(path)
+                for level_key in other.get('runs', {}):
+                    if level_key not in merged['runs']:
+                        merged['runs'][level_key] = other['runs'][level_key]
+                    else:
+                        for method_key in other['runs'][level_key]:
+                            if method_key in merged['runs'][level_key]:
+                                merged['runs'][level_key][method_key].extend(
+                                    other['runs'][level_key][method_key])
+                            else:
+                                merged['runs'][level_key][method_key] = \
+                                    other['runs'][level_key][method_key]
+    
+    elif 'runs' in first_data and isinstance(first_data['runs'], list):
+        # Phase 4 style: runs = [run_dict, run_dict, ...]
+        merged = copy.deepcopy(first_data)
+        for seed_val, path in seed_files[1:]:
+            other = load_json(path)
+            merged['runs'].extend(other.get('runs', []))
+    
+    else:
+        # Fallback: just use first file
+        merged = first_data
+        print("  ⚠️  Unknown structure, using first seed file only.")
+    
+    # Also merge paid_fd_runs / fixed_eps_runs if present (Phase 3)
+    for extra_key in ['paid_fd_runs', 'fixed_eps_runs']:
+        if extra_key in first_data:
+            if extra_key not in merged:
+                merged[extra_key] = copy.deepcopy(first_data[extra_key])
+            for seed_val, path in seed_files[1:]:
+                other = load_json(path)
+                for k in other.get(extra_key, {}):
+                    if k in merged[extra_key]:
+                        merged[extra_key][k].extend(other[extra_key][k])
+                    else:
+                        merged[extra_key][k] = other[extra_key][k]
+    
+    # Save merged result
+    out_path = result_path(phase)
+    save_json(merged, out_path)
+    n_seeds = len(seed_files)
+    print(f"  ✅ Merged {n_seeds} seeds → {Path(out_path).name}")
 
 
 def get_device(device_arg: str) -> str:
@@ -154,9 +257,11 @@ def run_single_experiment(
         seed=seed
     )
     client_indices = partitioner.partition(train_data, targets)
-    client_loaders = create_client_loaders(train_data, client_indices, batch_size=32)
-    test_loader = DataLoader(test_data, batch_size=128, shuffle=False)
-    public_loader = DataLoader(public_data, batch_size=32, shuffle=False)
+    client_loaders = create_client_loaders(train_data, client_indices, batch_size=128)
+    test_loader = DataLoader(test_data, batch_size=256, shuffle=False,
+                             num_workers=4, pin_memory=True, persistent_workers=True)
+    public_loader = DataLoader(public_data, batch_size=128, shuffle=False,
+                               num_workers=4, pin_memory=True, persistent_workers=True)
     
     # ---- Devices ----
     het_config = config.get('heterogeneity', {})
@@ -371,7 +476,7 @@ def run_phase1_gamma(device: str, seeds: list, n_rounds: int, quick: bool = Fals
             runs.append(run)
         results['runs'][str(gamma)] = runs
     
-    save_json(results, result_path('phase1_gamma'))
+    save_phase_results(results, 'phase1_gamma', seeds)
     return results
 
 
@@ -416,7 +521,7 @@ def run_phase1_lambda(device: str, seeds: list, n_rounds: int, quick: bool = Fal
             runs.append(run)
         results['runs'][str(lam)] = runs
     
-    save_json(results, result_path('phase1_lambda'))
+    save_phase_results(results, 'phase1_lambda', seeds)
     return results
 
 
@@ -478,7 +583,7 @@ def run_phase2(device: str, seeds: list, n_rounds: int, quick: bool = False):
             runs.append(run)
         results['runs'][method_name] = runs
     
-    save_json(results, result_path('phase2_convergence'))
+    save_phase_results(results, 'phase2_convergence', seeds)
     return results
 
 
@@ -548,7 +653,7 @@ def run_phase3(device: str, seeds: list, n_rounds: int, quick: bool = False):
             runs.append(run)
         results['paid_fd_runs'][str(lam)] = runs
     
-    save_json(results, result_path('phase3_privacy'))
+    save_phase_results(results, 'phase3_privacy', seeds)
     return results
 
 
@@ -581,7 +686,7 @@ def run_phase4(device: str, seeds: list, n_rounds: int, quick: bool = False):
                                      save_decisions=True)
         results['runs'].append(run)
     
-    save_json(results, result_path('phase4_incentive'))
+    save_phase_results(results, 'phase4_incentive', seeds)
     return results
 
 
@@ -644,7 +749,7 @@ def run_phase5(device: str, seeds: list, n_rounds: int, quick: bool = False):
                 runs.append(run)
             results['runs'][level_name][method_name] = runs
     
-    save_json(results, result_path('phase5_heterogeneity'))
+    save_phase_results(results, 'phase5_heterogeneity', seeds)
     return results
 
 
@@ -696,7 +801,7 @@ def run_phase6(device: str, seeds: list, n_rounds: int, quick: bool = False):
                 runs.append(run)
             results['runs'][str(n_dev)][method_name] = runs
     
-    save_json(results, result_path('phase6_scalability'))
+    save_phase_results(results, 'phase6_scalability', seeds)
     return results
 
 
@@ -757,7 +862,7 @@ def run_phase7(device: str, seeds: list, n_rounds: int, quick: bool = False):
             runs.append(run)
         results['runs'][variant_name] = runs
     
-    save_json(results, result_path('phase7_ablation'))
+    save_phase_results(results, 'phase7_ablation', seeds)
     return results
 
 
@@ -869,6 +974,8 @@ Examples:
                        help='Random seeds (default: 42 123 456)')
     parser.add_argument('--skip-existing', action='store_true',
                        help='Skip phases that already have results')
+    parser.add_argument('--merge', action='store_true',
+                       help='Merge per-seed result files into combined files')
     parser.add_argument('--list', action='store_true',
                        help='List all phases and their status')
     args = parser.parse_args()
@@ -887,6 +994,14 @@ Examples:
             exists = result_exists(PHASE_RESULT_FILES[pid])
             status = "✅ Done" if exists else "⬜ Pending"
             print(f"  {pid}: {name} [{status}]")
+        return
+    
+    # Handle --merge mode
+    if args.merge:
+        phases_to_merge = PHASE_ORDER if args.all else ([args.phase] if args.phase else PHASE_ORDER)
+        for pid in phases_to_merge:
+            phase_file = PHASE_RESULT_FILES[pid]
+            merge_seed_results(phase_file, args.seeds)
         return
     
     if not args.phase and not args.all:

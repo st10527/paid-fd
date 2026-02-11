@@ -194,7 +194,7 @@ class PAIDFD(FederatedMethod):
             # Compute CLIPPED logits on ALL public data
             local_model.eval()
             logit_chunks = []
-            bs = 256
+            bs = 512
             with torch.no_grad():
                 for start in range(0, n_public, bs):
                     batch = public_images[start:start+bs].to(self.device)
@@ -338,7 +338,7 @@ class PAIDFD(FederatedMethod):
         
         # Keep teacher_probs on CPU, move batches to device on-the-fly
         # to avoid GPU OOM with large public sets
-        batch_size = 128
+        batch_size = 256
         
         for epoch in range(self.config.distill_epochs):
             perm = torch.randperm(n_target)
