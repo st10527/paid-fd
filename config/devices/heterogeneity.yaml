@@ -131,21 +131,38 @@ cost_parameters:
 # These values will be validated through sensitivity analysis (Exp 3, Exp 5)
 #
 privacy_sensitivity:
+  # Per-device jitter: each λ_i = base_value × Uniform(1-jitter, 1+jitter)
+  # This creates unique thresholds per device → smoother participation curves
+  lambda_jitter: 0.3   # ±30%
+  
+  # 5 privacy levels for gradual participation transitions
+  # The server pricing optimizer will find different optimal prices at
+  # different γ values, inducing different subsets to participate
   levels:
+    very_low:
+      value: 0.05
+      ratio: 0.15      # 15% of devices
+      description: "Public data devices (weather stations, etc.)"
+
     low:
-      value: 0.1
-      ratio: 0.40      # 40% of devices
+      value: 0.15
+      ratio: 0.25      # 25% of devices
       description: "Non-sensitive data (environmental sensors, etc.)"
       
     medium:
-      value: 0.5
-      ratio: 0.40      # 40% of devices
+      value: 0.4
+      ratio: 0.25      # 25% of devices
       description: "Moderate sensitivity (activity recognition, etc.)"
-      
+
     high:
-      value: 1.0
+      value: 0.8
       ratio: 0.20      # 20% of devices
       description: "Sensitive data (health monitoring, etc.)"
+
+    very_high:
+      value: 1.5
+      ratio: 0.15      # 15% of devices
+      description: "Highly sensitive data (medical devices, etc.)"
 
 # =============================================================================
 # Experimental Variations

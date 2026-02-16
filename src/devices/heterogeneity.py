@@ -128,15 +128,18 @@ def get_default_config() -> Dict[str, Any]:
             "type_c": {"cpu_freq_ghz": 0.8, "memory_mb": 1024, "compute_capability": 0.5, "ratio": 0.30},
         },
         "cost_parameters": {
-            "c_inf_base": 0.01,
+            "c_inf_base": 0.1,
             "c_inf_multipliers": {"type_a": 0.5, "type_b": 1.0, "type_c": 2.0},
-            "c_comm_range": [0.005, 0.02],
+            "c_comm_range": [0.05, 0.2],
         },
         "privacy_sensitivity": {
+            "lambda_jitter": 0.3,
             "levels": {
-                "low": {"value": 0.01, "ratio": 0.40},
-                "medium": {"value": 0.05, "ratio": 0.40},
-                "high": {"value": 0.10, "ratio": 0.20},
+                "very_low": {"value": 0.05, "ratio": 0.15},
+                "low": {"value": 0.15, "ratio": 0.25},
+                "medium": {"value": 0.4, "ratio": 0.25},
+                "high": {"value": 0.8, "ratio": 0.20},
+                "very_high": {"value": 1.5, "ratio": 0.15},
             }
         },
         "communication_model": {
@@ -314,18 +317,25 @@ class HeterogeneityGenerator:
         Supports lambda_mult override: if config['privacy_sensitivity']['lambda_mult']
         is set, ALL lambda values are multiplied by this factor.
         """
-        # Read optional global multiplier
-        lambda_mult = self.config.get("privacy_sensitivity", {}).get("lambda_mult", 1.0)
+        # Read optional global multiplier and jitter
+        ps_config = self.config.get("privacy_sensitivity", {})
+        lambda_mult = ps_config.get("lambda_mult", 1.0)
+        lambda_jitter = ps_config.get("lambda_jitter", 0.3)  # ±30% default
         
         lambdas = []
         for level_key, level_config in self.privacy_levels.items():
             count = int(self.n_devices * level_config["ratio"])
-            lambdas.extend([level_config["value"] * lambda_mult] * count)
+            base_val = level_config["value"] * lambda_mult
+            for _ in range(count):
+                # Add uniform jitter so each device has a unique λ
+                jitter = 1.0 + self.rng.uniform(-lambda_jitter, lambda_jitter)
+                lambdas.append(base_val * jitter)
         
         # Fill remaining with medium level
-        medium_value = self.privacy_levels.get("medium", {"value": 0.05})["value"] * lambda_mult
+        medium_base = self.privacy_levels.get("medium", {"value": 0.05})["value"] * lambda_mult
         while len(lambdas) < self.n_devices:
-            lambdas.append(medium_value)
+            jitter = 1.0 + self.rng.uniform(-lambda_jitter, lambda_jitter)
+            lambdas.append(medium_base * jitter)
         
         self.rng.shuffle(lambdas)
         return lambdas[:self.n_devices]

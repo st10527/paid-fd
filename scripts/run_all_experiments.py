@@ -448,7 +448,7 @@ def run_phase1_gamma(device: str, seeds: list, n_rounds: int, quick: bool = Fals
     print("Phase 1.1: Gamma Sensitivity Analysis")
     print("=" * 70)
     
-    gamma_values = [2, 3, 5, 7, 10, 15, 20]
+    gamma_values = [3, 5, 7, 10, 15, 20]
     if quick:
         gamma_values = [5, 10]
     
