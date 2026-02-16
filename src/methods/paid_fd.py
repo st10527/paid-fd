@@ -103,6 +103,13 @@ class PAIDFD(FederatedMethod):
         # Energy calculator
         self.energy_calc = EnergyCalculator()
         
+        # Persistent distillation optimizer (maintains momentum across rounds)
+        self.distill_optimizer = torch.optim.Adam(
+            self.server_model.parameters(),
+            lr=self.config.distill_lr,
+            weight_decay=1e-4
+        )
+        
         # Track statistics
         self.price_history = []
         self.participation_history = []
@@ -328,10 +335,7 @@ class PAIDFD(FederatedMethod):
         Uses all N samples for distillation.
         """
         self.server_model.train()
-        optimizer = torch.optim.Adam(
-            self.server_model.parameters(),
-            lr=self.config.distill_lr
-        )
+        optimizer = self.distill_optimizer
         
         T = self.config.temperature
         n_target = min(len(teacher_probs), len(public_images))

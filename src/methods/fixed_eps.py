@@ -79,6 +79,13 @@ class FixedEpsilon(FederatedMethod):
         self.config = config or FixedEpsilonConfig()
         self.energy_calc = EnergyCalculator()
         self.rng = np.random.RandomState(42)
+        
+        # Persistent distillation optimizer (maintains momentum across rounds)
+        self.distill_optimizer = torch.optim.Adam(
+            self.server_model.parameters(),
+            lr=self.config.distill_lr,
+            weight_decay=1e-4
+        )
 
     def run_round(
         self,
@@ -211,10 +218,7 @@ class FixedEpsilon(FederatedMethod):
     ):
         """Distill aggregated knowledge to server model (same as PAID-FD)."""
         self.server_model.train()
-        optimizer = torch.optim.Adam(
-            self.server_model.parameters(),
-            lr=self.config.distill_lr
-        )
+        optimizer = self.distill_optimizer
 
         T = self.config.temperature
         n_target = min(len(teacher_probs), len(public_images))

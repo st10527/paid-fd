@@ -496,7 +496,7 @@ def load_cifar100_safe_split(root='./data', n_public=10000, seed=42):
     from torch.utils.data import Subset
     import numpy as np
 
-    # 1. 定義標準轉換 (與 Private 一致)
+    # 1. 定義轉換
     stats = ((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))
     transform_train = transforms.Compose([
         transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
@@ -509,9 +509,13 @@ def load_cifar100_safe_split(root='./data', n_public=10000, seed=42):
         transforms.Normalize(*stats)
     ])
 
-    # 2. 載入完整 Training Set
-    full_train_set = torchvision.datasets.CIFAR100(
+    # 2. 載入完整 Training Set (with augmentation for private data)
+    full_train_aug = torchvision.datasets.CIFAR100(
         root=root, train=True, download=True, transform=transform_train
+    )
+    # Also load WITHOUT augmentation (for public data inference)
+    full_train_clean = torchvision.datasets.CIFAR100(
+        root=root, train=True, download=True, transform=transform_test
     )
     
     # 3. 載入 Test Set (神聖不可侵犯)
@@ -522,13 +526,15 @@ def load_cifar100_safe_split(root='./data', n_public=10000, seed=42):
     # 4. 執行安全切割 (Safe Split)
     # 使用固定 seed 確保每次實驗的 Public Data 是一樣的
     np.random.seed(seed)
-    indices = np.random.permutation(len(full_train_set))
+    indices = np.random.permutation(len(full_train_aug))
     
-    public_indices = indices[:n_public]      # 前 10k 給 Public
-    private_indices = indices[n_public:]     # 後 40k 給 Private
+    public_indices = indices[:n_public]      # 前 n_public 給 Public
+    private_indices = indices[n_public:]     # 後面給 Private
     
-    public_set = Subset(full_train_set, public_indices)
-    private_set = Subset(full_train_set, private_indices)
+    # Private data: uses augmentation (RandomCrop + Flip) for local training
+    private_set = Subset(full_train_aug, private_indices)
+    # Public data: NO augmentation (deterministic inference for logit alignment)
+    public_set = Subset(full_train_clean, public_indices)
 
     print(f"[TMC Safe Mode] Split Report:")
     print(f"  Public (Server):  {len(public_set)} samples (from Train)")

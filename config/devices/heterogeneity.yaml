@@ -102,7 +102,8 @@ communication_model:
 cost_parameters:
   # Base inference cost (normalized)
   # Interpretation: cost of generating one logit on public data
-  c_inf_base: 0.01
+  # Calibrated so c_total falls in [0.1, 0.4] range for meaningful game dynamics
+  c_inf_base: 0.1
   
   # Inference cost multipliers per device type
   c_inf_multipliers:
@@ -112,7 +113,7 @@ cost_parameters:
   
   # Communication cost range (normalized)
   # Varies based on channel conditions
-  c_comm_range: [0.005, 0.02]
+  c_comm_range: [0.05, 0.2]
 
 # =============================================================================
 # Privacy Sensitivity Distribution
@@ -132,17 +133,17 @@ cost_parameters:
 privacy_sensitivity:
   levels:
     low:
-      value: 0.01
+      value: 0.1
       ratio: 0.40      # 40% of devices
       description: "Non-sensitive data (environmental sensors, etc.)"
       
     medium:
-      value: 0.05
+      value: 0.5
       ratio: 0.40      # 40% of devices
       description: "Moderate sensitivity (activity recognition, etc.)"
       
     high:
-      value: 0.10
+      value: 1.0
       ratio: 0.20      # 20% of devices
       description: "Sensitive data (health monitoring, etc.)"
 

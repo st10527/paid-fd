@@ -142,7 +142,7 @@ class FederatedMethod(ABC):
             Average training loss
         """
         model.train()
-        optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
+        optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=5e-4)
         criterion = nn.CrossEntropyLoss()
         
         total_loss = 0.0

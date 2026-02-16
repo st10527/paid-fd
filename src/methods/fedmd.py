@@ -85,6 +85,13 @@ class FedMD(FederatedMethod):
         super().__init__(server_model, n_classes, device)
         self.config = config or FedMDConfig()
         self.energy_calc = EnergyCalculator()
+        
+        # Persistent distillation optimizer (maintains momentum across rounds)
+        self.distill_optimizer = torch.optim.Adam(
+            self.server_model.parameters(),
+            lr=self.config.distill_lr,
+            weight_decay=1e-4
+        )
 
     def run_round(
         self,
@@ -199,10 +206,7 @@ class FedMD(FederatedMethod):
     ):
         """Distill aggregated knowledge to server model (same as PAID-FD)."""
         self.server_model.train()
-        optimizer = torch.optim.Adam(
-            self.server_model.parameters(),
-            lr=self.config.distill_lr
-        )
+        optimizer = self.distill_optimizer
 
         T = self.config.temperature
         n_target = min(len(teacher_probs), len(public_images))

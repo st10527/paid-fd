@@ -354,17 +354,17 @@ def _create_method(method_name: str, model, config: dict, device: str):
     mc = config.get('method_config', {})
     tc = config  # training config is at top level
     
-    local_epochs = tc.get('local_epochs', 20)
-    local_lr = tc.get('local_lr', 0.1)
-    distill_epochs = tc.get('distill_epochs', 10)
-    distill_lr = tc.get('distill_lr', 0.005)
+    local_epochs = tc.get('local_epochs', 5)
+    local_lr = tc.get('local_lr', 0.01)
+    distill_epochs = tc.get('distill_epochs', 5)
+    distill_lr = tc.get('distill_lr', 0.001)
     temperature = tc.get('temperature', 3.0)
     
     m = copy_model(model, device=device)
     
     if method_name == 'PAID-FD':
         cfg = PAIDFDConfig(
-            gamma=mc.get('gamma', tc.get('gamma', 500.0)),
+            gamma=mc.get('gamma', tc.get('gamma', 10.0)),
             delta=mc.get('delta', 0.01),
             budget=float(mc.get('budget', 'inf')),
             local_epochs=local_epochs,
@@ -448,9 +448,9 @@ def run_phase1_gamma(device: str, seeds: list, n_rounds: int, quick: bool = Fals
     print("Phase 1.1: Gamma Sensitivity Analysis")
     print("=" * 70)
     
-    gamma_values = [100, 300, 500, 700, 1000]
+    gamma_values = [2, 3, 5, 7, 10, 15, 20]
     if quick:
-        gamma_values = [300, 700]
+        gamma_values = [5, 10]
     
     results = {'phase': 'phase1_gamma', 'gamma_values': gamma_values, 'runs': {}}
     
@@ -461,14 +461,11 @@ def run_phase1_gamma(device: str, seeds: list, n_rounds: int, quick: bool = Fals
             print(f"  Seed {seed}:")
             config = {
                 'n_devices': 50, 'gamma': gamma, 'alpha': 0.5,
-                'local_epochs': 20, 'local_lr': 0.1, 'local_momentum': 0.9,
-                'distill_epochs': 10, 'distill_lr': 0.005, 'temperature': 3.0,
+                'local_epochs': 5, 'local_lr': 0.01, 'local_momentum': 0.9,
+                'distill_epochs': 5, 'distill_lr': 0.001, 'temperature': 3.0,
                 'synthetic': quick,
                 'heterogeneity': {
                     'config_file': 'config/devices/heterogeneity.yaml',
-                    'overrides': {
-                        'privacy_sensitivity': {'lambda_mult': 0.1}
-                    }
                 },
                 'method_config': {'gamma': gamma, 'delta': 0.01}
             }
@@ -490,9 +487,9 @@ def run_phase1_lambda(device: str, seeds: list, n_rounds: int, quick: bool = Fal
     best_gamma = _get_best_gamma()
     print(f"  Using best γ = {best_gamma} from Phase 1.1")
     
-    lambda_values = [0.01, 0.1, 1.0, 5.0, 10.0]
+    lambda_values = [0.5, 1.0, 2.0, 5.0]
     if quick:
-        lambda_values = [0.1, 5.0]
+        lambda_values = [1.0, 5.0]
     
     results = {
         'phase': 'phase1_lambda', 'best_gamma': best_gamma,
@@ -506,8 +503,8 @@ def run_phase1_lambda(device: str, seeds: list, n_rounds: int, quick: bool = Fal
             print(f"  Seed {seed}:")
             config = {
                 'n_devices': 50, 'gamma': best_gamma, 'alpha': 0.5,
-                'local_epochs': 20, 'local_lr': 0.1, 'local_momentum': 0.9,
-                'distill_epochs': 10, 'distill_lr': 0.005, 'temperature': 3.0,
+                'local_epochs': 5, 'local_lr': 0.01, 'local_momentum': 0.9,
+                'distill_epochs': 5, 'distill_lr': 0.001, 'temperature': 3.0,
                 'synthetic': quick,
                 'heterogeneity': {
                     'config_file': 'config/devices/heterogeneity.yaml',
@@ -571,8 +568,8 @@ def run_phase2(device: str, seeds: list, n_rounds: int, quick: bool = False):
             print(f"  Seed {seed}:")
             config = {
                 'n_devices': 50, 'gamma': best_gamma, 'alpha': 0.5,
-                'local_epochs': 20, 'local_lr': 0.1, 'local_momentum': 0.9,
-                'distill_epochs': 10, 'distill_lr': 0.005, 'temperature': 3.0,
+                'local_epochs': 5, 'local_lr': 0.01, 'local_momentum': 0.9,
+                'distill_epochs': 5, 'distill_lr': 0.001, 'temperature': 3.0,
                 'synthetic': quick,
                 'heterogeneity': {
                     'config_file': 'config/devices/heterogeneity.yaml',
@@ -596,10 +593,10 @@ def run_phase3(device: str, seeds: list, n_rounds: int, quick: bool = False):
     best_gamma = _get_best_gamma()
     
     fixed_eps_values = [0.5, 1.0, 2.0, 5.0, 10.0, 20.0]
-    paid_fd_lambda_values = [0.01, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0]
+    paid_fd_lambda_values = [0.1, 0.5, 1.0, 2.0, 5.0, 10.0]
     if quick:
         fixed_eps_values = [1.0, 5.0, 10.0]
-        paid_fd_lambda_values = [0.1, 1.0, 10.0]
+        paid_fd_lambda_values = [0.5, 2.0, 10.0]
     
     results = {
         'phase': 'phase3_privacy', 'best_gamma': best_gamma,
@@ -618,8 +615,8 @@ def run_phase3(device: str, seeds: list, n_rounds: int, quick: bool = False):
             print(f"  Seed {seed}:")
             config = {
                 'n_devices': 50, 'alpha': 0.5,
-                'local_epochs': 20, 'local_lr': 0.1, 'local_momentum': 0.9,
-                'distill_epochs': 10, 'distill_lr': 0.005, 'temperature': 3.0,
+                'local_epochs': 5, 'local_lr': 0.01, 'local_momentum': 0.9,
+                'distill_epochs': 5, 'distill_lr': 0.001, 'temperature': 3.0,
                 'synthetic': quick,
                 'heterogeneity': {
                     'config_file': 'config/devices/heterogeneity.yaml',
@@ -638,8 +635,8 @@ def run_phase3(device: str, seeds: list, n_rounds: int, quick: bool = False):
             print(f"  Seed {seed}:")
             config = {
                 'n_devices': 50, 'gamma': best_gamma, 'alpha': 0.5,
-                'local_epochs': 20, 'local_lr': 0.1, 'local_momentum': 0.9,
-                'distill_epochs': 10, 'distill_lr': 0.005, 'temperature': 3.0,
+                'local_epochs': 5, 'local_lr': 0.01, 'local_momentum': 0.9,
+                'distill_epochs': 5, 'distill_lr': 0.001, 'temperature': 3.0,
                 'synthetic': quick,
                 'heterogeneity': {
                     'config_file': 'config/devices/heterogeneity.yaml',
@@ -674,8 +671,8 @@ def run_phase4(device: str, seeds: list, n_rounds: int, quick: bool = False):
         print(f"\n  Seed {seed}:")
         config = {
             'n_devices': 50, 'gamma': best_gamma, 'alpha': 0.5,
-            'local_epochs': 20, 'local_lr': 0.1, 'local_momentum': 0.9,
-            'distill_epochs': 10, 'distill_lr': 0.005, 'temperature': 3.0,
+            'local_epochs': 5, 'local_lr': 0.01, 'local_momentum': 0.9,
+            'distill_epochs': 5, 'distill_lr': 0.001, 'temperature': 3.0,
             'synthetic': quick,
             'heterogeneity': {
                 'config_file': 'config/devices/heterogeneity.yaml',
@@ -732,8 +729,8 @@ def run_phase5(device: str, seeds: list, n_rounds: int, quick: bool = False):
                 print(f"  Seed {seed}:")
                 config = {
                     'n_devices': 50, 'gamma': best_gamma, 'alpha': 0.5,
-                    'local_epochs': 20, 'local_lr': 0.1, 'local_momentum': 0.9,
-                    'distill_epochs': 10, 'distill_lr': 0.005, 'temperature': 3.0,
+                    'local_epochs': 5, 'local_lr': 0.01, 'local_momentum': 0.9,
+                    'distill_epochs': 5, 'distill_lr': 0.001, 'temperature': 3.0,
                     'synthetic': quick,
                     'heterogeneity': {
                         'config_file': 'config/devices/heterogeneity.yaml',
@@ -789,8 +786,8 @@ def run_phase6(device: str, seeds: list, n_rounds: int, quick: bool = False):
                 print(f"  Seed {seed}:")
                 config = {
                     'n_devices': n_dev, 'gamma': best_gamma, 'alpha': 0.5,
-                    'local_epochs': 20, 'local_lr': 0.1, 'local_momentum': 0.9,
-                    'distill_epochs': 10, 'distill_lr': 0.005, 'temperature': 3.0,
+                    'local_epochs': 5, 'local_lr': 0.01, 'local_momentum': 0.9,
+                    'distill_epochs': 5, 'distill_lr': 0.001, 'temperature': 3.0,
                     'synthetic': quick,
                     'heterogeneity': {
                         'config_file': 'config/devices/heterogeneity.yaml',
@@ -850,8 +847,8 @@ def run_phase7(device: str, seeds: list, n_rounds: int, quick: bool = False):
             print(f"  Seed {seed}:")
             config = {
                 'n_devices': 50, 'gamma': best_gamma, 'alpha': 0.5,
-                'local_epochs': 20, 'local_lr': 0.1, 'local_momentum': 0.9,
-                'distill_epochs': 10, 'distill_lr': 0.005, 'temperature': 3.0,
+                'local_epochs': 5, 'local_lr': 0.01, 'local_momentum': 0.9,
+                'distill_epochs': 5, 'distill_lr': 0.001, 'temperature': 3.0,
                 'synthetic': quick,
                 'heterogeneity': {
                     'config_file': 'config/devices/heterogeneity.yaml',
@@ -870,7 +867,7 @@ def run_phase7(device: str, seeds: list, n_rounds: int, quick: bool = False):
 # Helper: Get best gamma from Phase 1.1 results
 # ============================================================================
 
-def _get_best_gamma(default: float = 500.0) -> float:
+def _get_best_gamma(default: float = 10.0) -> float:
     """Load best gamma from phase 1.1 results, or return default."""
     path = result_path('phase1_gamma')
     if not Path(path).exists():
@@ -968,8 +965,8 @@ Examples:
                        help='Quick test mode (synthetic data, fewer configs)')
     parser.add_argument('--device', type=str, default='auto',
                        help='Device (cuda/cpu/auto)')
-    parser.add_argument('--rounds', type=int, default=50,
-                       help='Number of rounds per experiment (default: 50)')
+    parser.add_argument('--rounds', type=int, default=100,
+                       help='Number of rounds per experiment (default: 100)')
     parser.add_argument('--seeds', type=int, nargs='+', default=[42, 123, 456],
                        help='Random seeds (default: 42 123 456)')
     parser.add_argument('--skip-existing', action='store_true',

@@ -309,15 +309,21 @@ class HeterogeneityGenerator:
         return types[:self.n_devices]
     
     def _assign_privacy_levels(self) -> List[float]:
-        """Assign privacy sensitivity values according to configured ratios."""
-        lambdas = []
+        """Assign privacy sensitivity values according to configured ratios.
         
+        Supports lambda_mult override: if config['privacy_sensitivity']['lambda_mult']
+        is set, ALL lambda values are multiplied by this factor.
+        """
+        # Read optional global multiplier
+        lambda_mult = self.config.get("privacy_sensitivity", {}).get("lambda_mult", 1.0)
+        
+        lambdas = []
         for level_key, level_config in self.privacy_levels.items():
             count = int(self.n_devices * level_config["ratio"])
-            lambdas.extend([level_config["value"]] * count)
+            lambdas.extend([level_config["value"] * lambda_mult] * count)
         
         # Fill remaining with medium level
-        medium_value = self.privacy_levels.get("medium", {"value": 0.05})["value"]
+        medium_value = self.privacy_levels.get("medium", {"value": 0.05})["value"] * lambda_mult
         while len(lambdas) < self.n_devices:
             lambdas.append(medium_value)
         

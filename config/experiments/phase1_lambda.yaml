@@ -10,20 +10,20 @@ system:
   seed: 42
 
 training:
-  n_rounds: 50
+  n_rounds: 100
   eval_every: 1
-  local_epochs: 20
-  local_lr: 0.1
+  local_epochs: 5
+  local_lr: 0.01
   local_momentum: 0.9
   local_batch_size: 32
-  distill_epochs: 10
-  distill_lr: 0.005
+  distill_epochs: 5
+  distill_lr: 0.001
   temperature: 3.0
 
 # Sweep over lambda_mult values (log scale)
 sweep:
   parameter: heterogeneity.overrides.privacy_sensitivity.lambda_mult
-  values: [0.01, 0.1, 1.0, 5.0, 10.0]
+  values: [0.5, 1.0, 2.0, 5.0]
 
 paid_fd:
   gamma: null  # Will be set to best from phase1_gamma
