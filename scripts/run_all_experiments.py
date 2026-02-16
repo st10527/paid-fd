@@ -955,6 +955,16 @@ Examples:
   python scripts/run_all_experiments.py --all --skip-existing    # Skip completed
   python scripts/run_all_experiments.py --phase 2 --device cuda:0
   python scripts/run_all_experiments.py --phase 1.1 --seeds 42 123 456
+
+Parallel execution (3 terminals, same GPU):
+  Terminal 1: python scripts/run_all_experiments.py --all --seed 42  --device cuda:0
+  Terminal 2: python scripts/run_all_experiments.py --all --seed 123 --device cuda:0
+  Terminal 3: python scripts/run_all_experiments.py --all --seed 456 --device cuda:0
+  After all:  python scripts/run_all_experiments.py --merge --all
+
+Phase-parallel (after Phase 1.1 done, skip-existing handles deps):
+  Terminal 1: python scripts/run_all_experiments.py --phase 2 --seed 42 --device cuda:0
+  Terminal 2: python scripts/run_all_experiments.py --phase 3 --seed 42 --device cuda:0
         """
     )
     parser.add_argument('--phase', type=str, default=None,
@@ -969,6 +979,8 @@ Examples:
                        help='Number of rounds per experiment (default: 100)')
     parser.add_argument('--seeds', type=int, nargs='+', default=[42, 123, 456],
                        help='Random seeds (default: 42 123 456)')
+    parser.add_argument('--seed', type=int, default=None,
+                       help='Run single seed only (for parallel execution across terminals)')
     parser.add_argument('--skip-existing', action='store_true',
                        help='Skip phases that already have results')
     parser.add_argument('--merge', action='store_true',
@@ -976,6 +988,10 @@ Examples:
     parser.add_argument('--list', action='store_true',
                        help='List all phases and their status')
     args = parser.parse_args()
+    
+    # --seed overrides --seeds
+    if args.seed is not None:
+        args.seeds = [args.seed]
     
     device = get_device(args.device)
     print(f"🖥️  Device: {device}")
