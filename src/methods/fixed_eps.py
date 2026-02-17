@@ -45,7 +45,7 @@ class FixedEpsilonConfig:
     temperature: float = 3.0
 
     # Pre-training on public data
-    pretrain_epochs: int = 10
+    pretrain_epochs: int = 50
     pretrain_lr: float = 0.1
 
     # Privacy

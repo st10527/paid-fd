@@ -243,7 +243,7 @@ def run_single_experiment(
         # Returns: (private_subset, public_subset, test_set)
         train_data, public_data, test_data = load_cifar100_safe_split(
             root='./data',
-            n_public=config.get('public_samples', 10000),
+            n_public=config.get('public_samples', 20000),
             seed=seed
         )
         # train_data is a Subset — extract targets aligned to its 0-based indexing
@@ -463,7 +463,7 @@ def run_phase1_gamma(device: str, seeds: list, n_rounds: int, quick: bool = Fals
                 'n_devices': 50, 'gamma': gamma, 'alpha': 0.5,
                 'local_epochs': 3, 'local_lr': 0.01, 'local_momentum': 0.9,
                 'distill_epochs': 5, 'distill_lr': 0.001, 'temperature': 3.0,
-                'public_samples': 10000,
+                'public_samples': 20000,
                 'synthetic': quick,
                 'heterogeneity': {
                     'config_file': 'config/devices/heterogeneity.yaml',

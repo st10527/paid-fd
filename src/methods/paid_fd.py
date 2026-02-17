@@ -51,14 +51,14 @@ class PAIDFDConfig:
     temperature: float = 3.0     # T=3: spread probability mass for richer soft labels
     
     # Pre-training on public data (FedMD "transfer learning" phase)
-    pretrain_epochs: int = 10    # Epochs to pre-train on public data before FL
+    pretrain_epochs: int = 50    # 50 epochs on public data (10k samples needs many passes)
     pretrain_lr: float = 0.1     # Standard SGD lr for pre-training
     
     # Privacy
     clip_bound: float = 5.0      # Logit clipping for LDP
     
     # Public data
-    public_samples: int = 10000  # 100/class for adequate coverage
+    public_samples: int = 20000  # 200/class for better pre-training & logit diversity
 
 
 class PAIDFD(FederatedMethod):
@@ -390,7 +390,7 @@ class PAIDFD(FederatedMethod):
                 epoch_loss += loss.item()
                 n_batches += 1
             scheduler.step()
-            if (epoch + 1) % 5 == 0 or epoch == 0:
+            if (epoch + 1) % 10 == 0 or epoch == 0:
                 print(f"    Epoch {epoch+1}/{self.config.pretrain_epochs}: "
                       f"loss={epoch_loss/n_batches:.4f}")
         

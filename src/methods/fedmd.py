@@ -51,14 +51,14 @@ class FedMDConfig:
     temperature: float = 3.0
 
     # Pre-training on public data
-    pretrain_epochs: int = 10
+    pretrain_epochs: int = 50
     pretrain_lr: float = 0.1
 
     # Logit clipping (for stability, not privacy)
     clip_bound: float = 5.0
 
     # Public data
-    public_samples: int = 10000
+    public_samples: int = 20000
 
 
 class FedMD(FederatedMethod):

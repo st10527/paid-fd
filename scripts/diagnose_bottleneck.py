@@ -32,7 +32,7 @@ def diagnose():
     from torch.utils.data import DataLoader
     
     private_set, public_set, test_set = load_cifar100_safe_split(
-        root='./data', n_public=10000, seed=42
+        root='./data', n_public=20000, seed=42
     )
     
     # Use ALL private data as centralized training set
@@ -75,7 +75,7 @@ def diagnose():
     # ================================================================
     # Pre-training on public data (FedMD "transfer learning" phase)
     # ================================================================
-    print("\n[Pre-training] Pre-train base model on public data (10 epochs)")
+    print("\n[Pre-training] Pre-train base model on public data (50 epochs, 20k samples)")
     print("-" * 50)
     
     augment = transforms.Compose([
@@ -85,12 +85,12 @@ def diagnose():
     
     pretrain_model = get_model('resnet18', num_classes=100).to(device)
     pt_opt = torch.optim.SGD(pretrain_model.parameters(), lr=0.1, momentum=0.9, weight_decay=5e-4)
-    pt_sched = torch.optim.lr_scheduler.CosineAnnealingLR(pt_opt, T_max=10)
+    pt_sched = torch.optim.lr_scheduler.CosineAnnealingLR(pt_opt, T_max=50)
     
     public_loader = DataLoader(public_set, batch_size=256, shuffle=True,
                                num_workers=4, pin_memory=True)
     
-    for epoch in range(10):
+    for epoch in range(50):
         pretrain_model.train()
         for data, target in public_loader:
             data = augment(data).to(device)
@@ -101,20 +101,21 @@ def diagnose():
             pt_opt.step()
         pt_sched.step()
         
-        pretrain_model.eval()
-        correct = 0
-        total = 0
-        with torch.no_grad():
-            for data, target in test_loader:
-                data, target = data.to(device), target.to(device)
-                pred = pretrain_model(data).argmax(dim=1)
-                correct += (pred == target).sum().item()
-                total += target.size(0)
-        acc = correct / total
-        print(f"  Epoch {epoch+1}/10: acc={acc:.4f}")
+        if (epoch + 1) % 10 == 0 or epoch == 0:
+            pretrain_model.eval()
+            correct = 0
+            total = 0
+            with torch.no_grad():
+                for data, target in test_loader:
+                    data, target = data.to(device), target.to(device)
+                    pred = pretrain_model(data).argmax(dim=1)
+                    correct += (pred == target).sum().item()
+                    total += target.size(0)
+            acc = correct / total
+            print(f"  Epoch {epoch+1}/50: acc={acc:.4f}")
     
     pretrain_acc = acc
-    print(f"  >> Pre-trained baseline (10k public only): {pretrain_acc:.4f}")
+    print(f"  >> Pre-trained baseline (20k public, 50 epochs): {pretrain_acc:.4f}")
     
     # ================================================================
     # Test 2: Single device fine-tuning FROM PRE-TRAINED (non-IID)
@@ -449,7 +450,7 @@ def diagnose():
     print("\n" + "=" * 70)
     print("DIAGNOSIS SUMMARY")
     print("=" * 70)
-    print(f"  Pre-train - Public data only (10k, 10 epochs):    {pretrain_acc:.4f}")
+    print(f"  Pre-train - Public data only (20k, 50 epochs):   {pretrain_acc:.4f}")
     print(f"  Test 1 - Centralized (48k samples, 10 epochs):    {centralized_acc:.4f}")
     print(f"  Test 2 - Single device fine-tuned (from pretrain): {single_device_acc:.4f}")
     print(f"  Test 4 - Distill from 1 teacher (no noise, T=3):  {distill_acc:.4f}")
