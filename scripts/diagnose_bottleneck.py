@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torchvision.transforms as transforms
 import numpy as np
 import time
 
@@ -88,7 +89,7 @@ def diagnose():
     # Pick a device with average data
     dev_id = 0
     local_model = get_model('resnet18', num_classes=100).to(device)
-    local_opt = torch.optim.SGD(local_model.parameters(), lr=0.01, momentum=0.9, weight_decay=5e-4)
+    local_opt = torch.optim.SGD(local_model.parameters(), lr=0.05, momentum=0.9, weight_decay=5e-4)
     local_loader = client_loaders[dev_id]
     
     print(f"  Device {dev_id}: {len(client_indices[dev_id])} samples")
@@ -187,6 +188,12 @@ def diagnose():
     
     print(f"  Teacher probs entropy: {-(teacher_probs * teacher_probs.log().clamp(min=-100)).sum(dim=1).mean():.4f}")
     
+    # Augmentation prevents server from memorising fixed public images
+    augment = transforms.Compose([
+        transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
+        transforms.RandomHorizontalFlip(),
+    ])
+    
     # Distill for 50 epochs (simulating 10 rounds × 5 distill_epochs)
     n_target = len(teacher_probs)
     for epoch in range(50):
@@ -197,7 +204,7 @@ def diagnose():
         for start in range(0, n_target, 256):
             end = min(start + 256, n_target)
             idx = perm[start:end]
-            data = public_images[idx].to(device)
+            data = augment(public_images[idx]).to(device)
             target = teacher_probs[idx].to(device)
             
             student_logits = student_model(data)
@@ -272,7 +279,7 @@ def diagnose():
         for start in range(0, n_target, 256):
             end = min(start + 256, n_target)
             idx = perm[start:end]
-            data = public_images[idx].to(device)
+            data = augment(public_images[idx]).to(device)
             target = noisy_probs[idx].to(device)
             
             s_logits = student2(data)
@@ -317,7 +324,7 @@ def diagnose():
     for i in range(10):
         m = get_model('resnet18', num_classes=100).to(device)
         local_models[i] = m
-        local_opts[i] = torch.optim.SGD(m.parameters(), lr=0.01, momentum=0.9, weight_decay=5e-4)
+        local_opts[i] = torch.optim.SGD(m.parameters(), lr=0.05, momentum=0.9, weight_decay=5e-4)
     
     for round_idx in range(30):
         # Each device trains 3 epochs (persistent)
@@ -351,15 +358,15 @@ def diagnose():
         avg_logits = sum(device_logits_list) / len(device_logits_list)
         teacher_p = F.softmax(avg_logits / T, dim=1)
         
-        # Distill to server model
+        # Distill to server model (5 epochs with augmentation)
         server_model.train()
         n_t = len(teacher_p)
-        for ep in range(1):
+        for ep in range(5):
             perm = torch.randperm(n_t)
             for start in range(0, n_t, 256):
                 end = min(start + 256, n_t)
                 idx = perm[start:end]
-                data = public_images[idx].to(device)
+                data = augment(public_images[idx]).to(device)
                 target = teacher_p[idx].to(device)
                 
                 s_logits = server_model(data)

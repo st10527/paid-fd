@@ -11,6 +11,7 @@ Complete implementation of the PAID-FD method including:
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torchvision.transforms as transforms
 import numpy as np
 from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass
@@ -41,11 +42,11 @@ class PAIDFDConfig:
     
     # Local training (per round — models persist across rounds)
     local_epochs: int = 3        # 3 epochs/round for better logits, persistent model
-    local_lr: float = 0.01       # SGD with momentum on CIFAR-100
+    local_lr: float = 0.05       # SGD with momentum on CIFAR-100
     local_momentum: float = 0.9  # Standard SGD momentum
     
     # Distillation
-    distill_epochs: int = 1      # 1 epoch/round (FedMD standard), avoid overfitting noisy targets
+    distill_epochs: int = 5      # 5 epochs/round (safe with augmentation)
     distill_lr: float = 0.001    # Adam lr for distillation (conservative)
     temperature: float = 1.0     # T=1: preserve signal from noisy logits
     
@@ -350,9 +351,19 @@ class PAIDFD(FederatedMethod):
         Uses KL divergence loss with temperature scaling.
         Receives pre-collected (images, probs) pairs so alignment is guaranteed.
         Uses all N samples for distillation.
+        
+        Data augmentation (RandomCrop + RandomHorizontalFlip) is applied
+        to public images during distillation to prevent the server model
+        from memorising the fixed set of public images.
         """
         self.server_model.train()
         optimizer = self.distill_optimizer
+        
+        # Augmentation on normalised tensors (works for CIFAR 32x32)
+        augment = transforms.Compose([
+            transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
+            transforms.RandomHorizontalFlip(),
+        ])
         
         T = self.config.temperature
         n_target = min(len(teacher_probs), len(public_images))
@@ -370,7 +381,7 @@ class PAIDFD(FederatedMethod):
                 end = min(start + batch_size, n_target)
                 idx = perm[start:end]
                 
-                data = public_images[idx].to(self.device)
+                data = augment(public_images[idx]).to(self.device)
                 target = teacher_probs[idx].to(self.device)
                 
                 # Student forward pass

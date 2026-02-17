@@ -27,6 +27,7 @@ Reference:
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torchvision.transforms as transforms
 import numpy as np
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
@@ -41,11 +42,11 @@ class FedMDConfig:
     """Configuration for FedMD."""
     # Local training (per round — models persist across rounds)
     local_epochs: int = 3
-    local_lr: float = 0.01
+    local_lr: float = 0.05
     local_momentum: float = 0.9
 
     # Distillation
-    distill_epochs: int = 1
+    distill_epochs: int = 5
     distill_lr: float = 0.001
     temperature: float = 1.0
 
@@ -223,6 +224,12 @@ class FedMD(FederatedMethod):
         self.server_model.train()
         optimizer = self.distill_optimizer
 
+        # Augmentation prevents server from memorising fixed public images
+        augment = transforms.Compose([
+            transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
+            transforms.RandomHorizontalFlip(),
+        ])
+
         T = self.config.temperature
         n_target = min(len(teacher_probs), len(public_images))
         batch_size = 256
@@ -233,7 +240,7 @@ class FedMD(FederatedMethod):
                 end = min(start + batch_size, n_target)
                 idx = perm[start:end]
 
-                data = public_images[idx].to(self.device)
+                data = augment(public_images[idx]).to(self.device)
                 target = teacher_probs[idx].to(self.device)
 
                 student_logits = self.server_model(data)
