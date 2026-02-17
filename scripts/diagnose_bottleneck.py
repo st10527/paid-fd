@@ -286,12 +286,13 @@ def diagnose():
     # ================================================================
     # Test 5: Distillation with noise (simulating FL)
     # ================================================================
-    print("\n[Test 5] Distillation from noisy teacher (simulating FL aggregation)")
+    print("\n[Test 5] Distillation from noisy teacher (T=1.0, simulating PAID-FD)")
     print("-" * 50)
     
     # Simulate: 35 devices, each contributes clipped logits, then average + noise
     N_participants = 35
     avg_eps = 0.5  # typical epsilon from game (gamma=5-7)
+    T_noisy = 1.0  # T=1 for noisy methods — preserves peaked signal
     
     # Simulate multiple devices by adding perturbation to teacher logits
     all_device_logits = []
@@ -310,9 +311,9 @@ def diagnose():
     noise_scale = sensitivity / avg_eps
     noise = np.random.laplace(0, noise_scale, agg_logits.shape).astype(np.float32)
     noisy_logits = agg_logits.numpy() + noise
-    noisy_probs = F.softmax(torch.from_numpy(noisy_logits).float() / T, dim=1)
+    noisy_probs = F.softmax(torch.from_numpy(noisy_logits).float() / T_noisy, dim=1)
     
-    print(f"  N={N_participants}, avg_eps={avg_eps}, noise_scale={noise_scale:.4f}")
+    print(f"  N={N_participants}, avg_eps={avg_eps}, noise_scale={noise_scale:.4f}, T={T_noisy}")
     print(f"  Signal std: {agg_logits.std():.4f}, Noise std: {np.std(noise):.4f}")
     print(f"  SNR: {agg_logits.std().item() / np.std(noise):.2f}")
     
@@ -331,10 +332,10 @@ def diagnose():
             
             s_logits = student2(data)
             loss = F.kl_div(
-                F.log_softmax(s_logits / T, dim=1),
+                F.log_softmax(s_logits / T_noisy, dim=1),
                 target,
                 reduction='batchmean'
-            ) * (T * T)
+            ) * (T_noisy * T_noisy)
             
             student2_opt.zero_grad()
             loss.backward()
@@ -454,7 +455,7 @@ def diagnose():
     print(f"  Test 1 - Centralized (48k samples, 10 epochs):    {centralized_acc:.4f}")
     print(f"  Test 2 - Single device fine-tuned (from pretrain): {single_device_acc:.4f}")
     print(f"  Test 4 - Distill from 1 teacher (no noise, T=3):  {distill_acc:.4f}")
-    print(f"  Test 5 - Distill from noisy aggregated (T=3):     {noisy_distill_acc:.4f}")
+    print(f"  Test 5 - Distill from noisy aggregated (T=1):   {noisy_distill_acc:.4f}")
     print(f"  Test 6 - Full FL (10 dev, 30 rnd, pretrain, T=3): {fl_acc:.4f}")
     print()
     print("Bottleneck analysis:")

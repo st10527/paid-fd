@@ -372,7 +372,7 @@ def _create_method(method_name: str, model, config: dict, device: str):
             local_momentum=tc.get('local_momentum', 0.9),
             distill_epochs=distill_epochs,
             distill_lr=distill_lr,
-            temperature=temperature,
+            temperature=1.0,  # T=1 for noisy methods (preserves signal under DP noise)
             clip_bound=mc.get('clip_bound', 5.0),
             public_samples=mc.get('public_samples_per_round', 1000),
         )
@@ -386,7 +386,7 @@ def _create_method(method_name: str, model, config: dict, device: str):
             local_lr=local_lr,
             distill_epochs=distill_epochs,
             distill_lr=distill_lr,
-            temperature=temperature,
+            temperature=1.0,  # T=1 for noisy methods (preserves signal under DP noise)
             clip_bound=5.0,
             participation_rate=mc.get('participation_rate', 1.0),
             samples_per_device=mc.get('samples_per_device', 100),
@@ -408,7 +408,7 @@ def _create_method(method_name: str, model, config: dict, device: str):
             local_lr=local_lr,
             distill_epochs=distill_epochs,
             distill_lr=distill_lr,
-            temperature=temperature,
+            temperature=3.0,  # T=3 for noise-free (richer soft label signal)
             clip_bound=5.0,
         )
         return FedMD(m, cfg, 100, device)

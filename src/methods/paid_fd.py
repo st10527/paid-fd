@@ -48,7 +48,7 @@ class PAIDFDConfig:
     # Distillation
     distill_epochs: int = 5      # 5 epochs/round (safe with augmentation)
     distill_lr: float = 0.001    # Adam lr for distillation (conservative)
-    temperature: float = 3.0     # T=3: spread probability mass for richer soft labels
+    temperature: float = 1.0     # T=1: preserve peaked signal under DP noise
     
     # Pre-training on public data (FedMD "transfer learning" phase)
     pretrain_epochs: int = 50    # 50 epochs on public data (10k samples needs many passes)

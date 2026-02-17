@@ -42,7 +42,7 @@ class FixedEpsilonConfig:
     # Distillation
     distill_epochs: int = 5
     distill_lr: float = 0.001
-    temperature: float = 3.0
+    temperature: float = 1.0     # T=1: preserve peaked signal under DP noise
 
     # Pre-training on public data
     pretrain_epochs: int = 50
