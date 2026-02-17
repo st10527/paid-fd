@@ -40,20 +40,20 @@ from ..models.utils import copy_model
 class FedMDConfig:
     """Configuration for FedMD."""
     # Local training (per round — models persist across rounds)
-    local_epochs: int = 1
+    local_epochs: int = 3
     local_lr: float = 0.01
     local_momentum: float = 0.9
 
     # Distillation
-    distill_epochs: int = 5
-    distill_lr: float = 0.005
-    temperature: float = 3.0
+    distill_epochs: int = 1
+    distill_lr: float = 0.001
+    temperature: float = 1.0
 
     # Logit clipping (for stability, not privacy)
     clip_bound: float = 5.0
 
     # Public data
-    public_samples: int = 2000
+    public_samples: int = 10000
 
 
 class FedMD(FederatedMethod):
@@ -89,8 +89,7 @@ class FedMD(FederatedMethod):
         # Persistent distillation optimizer (maintains momentum across rounds)
         self.distill_optimizer = torch.optim.Adam(
             self.server_model.parameters(),
-            lr=self.config.distill_lr,
-            weight_decay=1e-4
+            lr=self.config.distill_lr
         )
         
         # Persistent local models

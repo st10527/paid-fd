@@ -40,20 +40,20 @@ class PAIDFDConfig:
     budget: float = float('inf') # Budget constraint
     
     # Local training (per round — models persist across rounds)
-    local_epochs: int = 1        # 1 epoch per round × 100 rounds = 100 total
+    local_epochs: int = 3        # 3 epochs/round for better logits, persistent model
     local_lr: float = 0.01       # SGD with momentum on CIFAR-100
     local_momentum: float = 0.9  # Standard SGD momentum
     
     # Distillation
-    distill_epochs: int = 5      # KD epochs per round
-    distill_lr: float = 0.005    # Adam lr for distillation
-    temperature: float = 3.0     # Hinton suggests 2-5, we use 3
+    distill_epochs: int = 1      # 1 epoch/round (FedMD standard), avoid overfitting noisy targets
+    distill_lr: float = 0.001    # Adam lr for distillation (conservative)
+    temperature: float = 1.0     # T=1: preserve signal from noisy logits
     
     # Privacy
     clip_bound: float = 5.0      # Logit clipping for LDP
     
     # Public data
-    public_samples: int = 2000   # Samples per round for logit computation
+    public_samples: int = 10000  # 100/class for adequate coverage
 
 
 class PAIDFD(FederatedMethod):
@@ -107,8 +107,7 @@ class PAIDFD(FederatedMethod):
         # Persistent distillation optimizer (maintains momentum across rounds)
         self.distill_optimizer = torch.optim.Adam(
             self.server_model.parameters(),
-            lr=self.config.distill_lr,
-            weight_decay=1e-4
+            lr=self.config.distill_lr
         )
         
         # Persistent local models: each device keeps its own model across rounds

@@ -235,7 +235,7 @@ def run_single_experiment(
     # ---- Data ----
     if synthetic:
         train_data, test_data, public_data = create_synthetic_datasets(
-            n_train=n_devices * 100, n_test=1000, n_public=2000, seed=seed
+            n_train=n_devices * 100, n_test=1000, n_public=5000, seed=seed
         )
         targets = np.array(train_data.targets)
     else:
@@ -243,7 +243,7 @@ def run_single_experiment(
         # Returns: (private_subset, public_subset, test_set)
         train_data, public_data, test_data = load_cifar100_safe_split(
             root='./data',
-            n_public=config.get('public_samples', 2000),
+            n_public=config.get('public_samples', 10000),
             seed=seed
         )
         # train_data is a Subset — extract targets aligned to its 0-based indexing
@@ -354,11 +354,11 @@ def _create_method(method_name: str, model, config: dict, device: str):
     mc = config.get('method_config', {})
     tc = config  # training config is at top level
     
-    local_epochs = tc.get('local_epochs', 1)
+    local_epochs = tc.get('local_epochs', 3)
     local_lr = tc.get('local_lr', 0.01)
-    distill_epochs = tc.get('distill_epochs', 5)
-    distill_lr = tc.get('distill_lr', 0.005)
-    temperature = tc.get('temperature', 3.0)
+    distill_epochs = tc.get('distill_epochs', 1)
+    distill_lr = tc.get('distill_lr', 0.001)
+    temperature = tc.get('temperature', 1.0)
     
     m = copy_model(model, device=device)
     
@@ -461,8 +461,9 @@ def run_phase1_gamma(device: str, seeds: list, n_rounds: int, quick: bool = Fals
             print(f"  Seed {seed}:")
             config = {
                 'n_devices': 50, 'gamma': gamma, 'alpha': 0.5,
-                'local_epochs': 1, 'local_lr': 0.01, 'local_momentum': 0.9,
-                'distill_epochs': 5, 'distill_lr': 0.005, 'temperature': 3.0,
+                'local_epochs': 3, 'local_lr': 0.01, 'local_momentum': 0.9,
+                'distill_epochs': 1, 'distill_lr': 0.001, 'temperature': 1.0,
+                'public_samples': 10000,
                 'synthetic': quick,
                 'heterogeneity': {
                     'config_file': 'config/devices/heterogeneity.yaml',
@@ -503,8 +504,8 @@ def run_phase1_lambda(device: str, seeds: list, n_rounds: int, quick: bool = Fal
             print(f"  Seed {seed}:")
             config = {
                 'n_devices': 50, 'gamma': best_gamma, 'alpha': 0.5,
-                'local_epochs': 1, 'local_lr': 0.01, 'local_momentum': 0.9,
-                'distill_epochs': 5, 'distill_lr': 0.005, 'temperature': 3.0,
+                'local_epochs': 3, 'local_lr': 0.01, 'local_momentum': 0.9,
+                'distill_epochs': 1, 'distill_lr': 0.001, 'temperature': 1.0,
                 'synthetic': quick,
                 'heterogeneity': {
                     'config_file': 'config/devices/heterogeneity.yaml',
@@ -568,8 +569,8 @@ def run_phase2(device: str, seeds: list, n_rounds: int, quick: bool = False):
             print(f"  Seed {seed}:")
             config = {
                 'n_devices': 50, 'gamma': best_gamma, 'alpha': 0.5,
-                'local_epochs': 1, 'local_lr': 0.01, 'local_momentum': 0.9,
-                'distill_epochs': 5, 'distill_lr': 0.005, 'temperature': 3.0,
+                'local_epochs': 3, 'local_lr': 0.01, 'local_momentum': 0.9,
+                'distill_epochs': 1, 'distill_lr': 0.001, 'temperature': 1.0,
                 'synthetic': quick,
                 'heterogeneity': {
                     'config_file': 'config/devices/heterogeneity.yaml',
@@ -615,8 +616,8 @@ def run_phase3(device: str, seeds: list, n_rounds: int, quick: bool = False):
             print(f"  Seed {seed}:")
             config = {
                 'n_devices': 50, 'alpha': 0.5,
-                'local_epochs': 1, 'local_lr': 0.01, 'local_momentum': 0.9,
-                'distill_epochs': 5, 'distill_lr': 0.005, 'temperature': 3.0,
+                'local_epochs': 3, 'local_lr': 0.01, 'local_momentum': 0.9,
+                'distill_epochs': 1, 'distill_lr': 0.001, 'temperature': 1.0,
                 'synthetic': quick,
                 'heterogeneity': {
                     'config_file': 'config/devices/heterogeneity.yaml',
@@ -635,8 +636,8 @@ def run_phase3(device: str, seeds: list, n_rounds: int, quick: bool = False):
             print(f"  Seed {seed}:")
             config = {
                 'n_devices': 50, 'gamma': best_gamma, 'alpha': 0.5,
-                'local_epochs': 1, 'local_lr': 0.01, 'local_momentum': 0.9,
-                'distill_epochs': 5, 'distill_lr': 0.005, 'temperature': 3.0,
+                'local_epochs': 3, 'local_lr': 0.01, 'local_momentum': 0.9,
+                'distill_epochs': 1, 'distill_lr': 0.001, 'temperature': 1.0,
                 'synthetic': quick,
                 'heterogeneity': {
                     'config_file': 'config/devices/heterogeneity.yaml',
@@ -671,8 +672,8 @@ def run_phase4(device: str, seeds: list, n_rounds: int, quick: bool = False):
         print(f"\n  Seed {seed}:")
         config = {
             'n_devices': 50, 'gamma': best_gamma, 'alpha': 0.5,
-            'local_epochs': 1, 'local_lr': 0.01, 'local_momentum': 0.9,
-            'distill_epochs': 5, 'distill_lr': 0.005, 'temperature': 3.0,
+            'local_epochs': 3, 'local_lr': 0.01, 'local_momentum': 0.9,
+            'distill_epochs': 1, 'distill_lr': 0.001, 'temperature': 1.0,
             'synthetic': quick,
             'heterogeneity': {
                 'config_file': 'config/devices/heterogeneity.yaml',
@@ -729,8 +730,8 @@ def run_phase5(device: str, seeds: list, n_rounds: int, quick: bool = False):
                 print(f"  Seed {seed}:")
                 config = {
                     'n_devices': 50, 'gamma': best_gamma, 'alpha': 0.5,
-                    'local_epochs': 1, 'local_lr': 0.01, 'local_momentum': 0.9,
-                    'distill_epochs': 5, 'distill_lr': 0.005, 'temperature': 3.0,
+                    'local_epochs': 3, 'local_lr': 0.01, 'local_momentum': 0.9,
+                    'distill_epochs': 1, 'distill_lr': 0.001, 'temperature': 1.0,
                     'synthetic': quick,
                     'heterogeneity': {
                         'config_file': 'config/devices/heterogeneity.yaml',
@@ -786,8 +787,8 @@ def run_phase6(device: str, seeds: list, n_rounds: int, quick: bool = False):
                 print(f"  Seed {seed}:")
                 config = {
                     'n_devices': n_dev, 'gamma': best_gamma, 'alpha': 0.5,
-                    'local_epochs': 1, 'local_lr': 0.01, 'local_momentum': 0.9,
-                    'distill_epochs': 5, 'distill_lr': 0.005, 'temperature': 3.0,
+                    'local_epochs': 3, 'local_lr': 0.01, 'local_momentum': 0.9,
+                    'distill_epochs': 1, 'distill_lr': 0.001, 'temperature': 1.0,
                     'synthetic': quick,
                     'heterogeneity': {
                         'config_file': 'config/devices/heterogeneity.yaml',
@@ -847,8 +848,8 @@ def run_phase7(device: str, seeds: list, n_rounds: int, quick: bool = False):
             print(f"  Seed {seed}:")
             config = {
                 'n_devices': 50, 'gamma': best_gamma, 'alpha': 0.5,
-                'local_epochs': 1, 'local_lr': 0.01, 'local_momentum': 0.9,
-                'distill_epochs': 5, 'distill_lr': 0.005, 'temperature': 3.0,
+                'local_epochs': 3, 'local_lr': 0.01, 'local_momentum': 0.9,
+                'distill_epochs': 1, 'distill_lr': 0.001, 'temperature': 1.0,
                 'synthetic': quick,
                 'heterogeneity': {
                     'config_file': 'config/devices/heterogeneity.yaml',

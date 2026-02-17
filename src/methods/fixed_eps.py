@@ -34,14 +34,14 @@ class FixedEpsilonConfig:
     epsilon: float = 1.0
 
     # Local training (per round — models persist across rounds)
-    local_epochs: int = 1
+    local_epochs: int = 3
     local_lr: float = 0.01
     local_momentum: float = 0.9
 
     # Distillation
-    distill_epochs: int = 5
-    distill_lr: float = 0.005
-    temperature: float = 3.0
+    distill_epochs: int = 1
+    distill_lr: float = 0.001
+    temperature: float = 1.0
 
     # Privacy
     clip_bound: float = 5.0
@@ -83,8 +83,7 @@ class FixedEpsilon(FederatedMethod):
         # Persistent distillation optimizer (maintains momentum across rounds)
         self.distill_optimizer = torch.optim.Adam(
             self.server_model.parameters(),
-            lr=self.config.distill_lr,
-            weight_decay=1e-4
+            lr=self.config.distill_lr
         )
         
         # Persistent local models

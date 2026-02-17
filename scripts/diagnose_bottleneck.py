@@ -1,0 +1,419 @@
+#!/usr/bin/env python3
+"""
+Deep diagnosis of why PAID-FD accuracy is stuck at 15-18% on CIFAR-100.
+
+This script tests each component of the pipeline independently to find
+exactly where the bottleneck is.
+"""
+import sys, os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import numpy as np
+import time
+
+def diagnose():
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    print(f"Device: {device}")
+    print("=" * 70)
+    
+    # ================================================================
+    # Test 1: Can ResNet18 learn CIFAR-100 AT ALL with standard training?
+    # ================================================================
+    print("\n[Test 1] Centralized ResNet-18 on CIFAR-100 (10 epochs, no FL)")
+    print("-" * 50)
+    
+    from src.data.datasets import load_cifar100_safe_split
+    from src.models import get_model
+    from torch.utils.data import DataLoader
+    
+    private_set, public_set, test_set = load_cifar100_safe_split(
+        root='./data', n_public=10000, seed=42
+    )
+    
+    # Use ALL private data as centralized training set
+    train_loader = DataLoader(private_set, batch_size=128, shuffle=True,
+                              num_workers=4, pin_memory=True)
+    test_loader = DataLoader(test_set, batch_size=256, shuffle=False,
+                             num_workers=4, pin_memory=True)
+    
+    model = get_model('resnet18', num_classes=100).to(device)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.1, momentum=0.9, weight_decay=5e-4)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10)
+    criterion = nn.CrossEntropyLoss()
+    
+    for epoch in range(10):
+        model.train()
+        for data, target in train_loader:
+            data, target = data.to(device), target.to(device)
+            optimizer.zero_grad()
+            loss = criterion(model(data), target)
+            loss.backward()
+            optimizer.step()
+        scheduler.step()
+        
+        # Eval
+        model.eval()
+        correct = 0
+        total = 0
+        with torch.no_grad():
+            for data, target in test_loader:
+                data, target = data.to(device), target.to(device)
+                pred = model(data).argmax(dim=1)
+                correct += (pred == target).sum().item()
+                total += target.size(0)
+        acc = correct / total
+        print(f"  Epoch {epoch+1}/10: acc={acc:.4f}")
+    
+    centralized_acc = acc
+    print(f"  >> Centralized baseline: {centralized_acc:.4f}")
+    
+    # ================================================================
+    # Test 2: Single device local training (960 samples, non-IID)
+    # ================================================================
+    print("\n[Test 2] Single device training (960 samples, non-IID, 100 epochs)")
+    print("-" * 50)
+    
+    from src.data.partition import DirichletPartitioner, create_client_loaders
+    
+    all_targets = np.array(private_set.dataset.targets)
+    targets = all_targets[private_set.indices]
+    
+    partitioner = DirichletPartitioner(alpha=0.5, n_clients=50, min_samples_per_client=10, seed=42)
+    client_indices = partitioner.partition(private_set, targets)
+    client_loaders = create_client_loaders(private_set, client_indices, batch_size=128)
+    
+    # Pick a device with average data
+    dev_id = 0
+    local_model = get_model('resnet18', num_classes=100).to(device)
+    local_opt = torch.optim.SGD(local_model.parameters(), lr=0.01, momentum=0.9, weight_decay=5e-4)
+    local_loader = client_loaders[dev_id]
+    
+    print(f"  Device {dev_id}: {len(client_indices[dev_id])} samples")
+    
+    for epoch in range(100):
+        local_model.train()
+        for data, target in local_loader:
+            data, target = data.to(device), target.to(device)
+            local_opt.zero_grad()
+            loss = criterion(local_model(data), target)
+            loss.backward()
+            local_opt.step()
+        
+        if (epoch + 1) % 20 == 0:
+            local_model.eval()
+            correct = 0
+            total = 0
+            with torch.no_grad():
+                for data, target in test_loader:
+                    data, target = data.to(device), target.to(device)
+                    pred = local_model(data).argmax(dim=1)
+                    correct += (pred == target).sum().item()
+                    total += target.size(0)
+            acc = correct / total
+            print(f"  Epoch {epoch+1}/100: test_acc={acc:.4f}")
+    
+    single_device_acc = acc
+    
+    # ================================================================
+    # Test 3: Logit quality from local model
+    # ================================================================
+    print("\n[Test 3] Logit quality analysis")
+    print("-" * 50)
+    
+    public_loader = DataLoader(public_set, batch_size=256, shuffle=False,
+                               num_workers=4, pin_memory=True)
+    
+    # Get logits from the trained local model
+    local_model.eval()
+    all_logits = []
+    all_labels = []
+    with torch.no_grad():
+        for data, target in public_loader:
+            data = data.to(device)
+            logits = local_model(data)
+            all_logits.append(logits.cpu())
+            all_labels.append(target)
+    
+    logits = torch.cat(all_logits, dim=0)
+    labels = torch.cat(all_labels, dim=0)
+    
+    # Check logit statistics
+    print(f"  Logit shape: {logits.shape}")
+    print(f"  Logit range: [{logits.min():.2f}, {logits.max():.2f}]")
+    print(f"  Logit mean: {logits.mean():.4f}, std: {logits.std():.4f}")
+    
+    # After clipping
+    C = 5.0
+    clipped = torch.clamp(logits, -C, C)
+    print(f"  After clip to [-{C},{C}]:")
+    print(f"    range: [{clipped.min():.2f}, {clipped.max():.2f}]")
+    print(f"    mean: {clipped.mean():.4f}, std: {clipped.std():.4f}")
+    
+    # Accuracy of logits as predictions
+    pred = logits.argmax(dim=1)
+    logit_acc = (pred == labels).float().mean().item()
+    print(f"  Logit prediction accuracy on public data: {logit_acc:.4f}")
+    
+    # ================================================================
+    # Test 4: Distillation quality (no noise)
+    # ================================================================
+    print("\n[Test 4] Distillation from perfect teacher (no noise, no FL)")
+    print("-" * 50)
+    
+    # Use the local model as teacher, distill to a fresh student
+    teacher_model = local_model
+    student_model = get_model('resnet18', num_classes=100).to(device)
+    student_opt = torch.optim.Adam(student_model.parameters(), lr=0.001)
+    
+    T = 1.0
+    teacher_model.eval()
+    
+    # Get teacher soft labels on public data
+    teacher_logits_list = []
+    public_images_list = []
+    with torch.no_grad():
+        for data, _ in public_loader:
+            data = data.to(device)
+            logits = teacher_model(data)
+            teacher_logits_list.append(logits.cpu())
+            public_images_list.append(data.cpu())
+    
+    teacher_logits = torch.cat(teacher_logits_list, dim=0)
+    public_images = torch.cat(public_images_list, dim=0)
+    teacher_probs = F.softmax(teacher_logits / T, dim=1)
+    
+    print(f"  Teacher probs entropy: {-(teacher_probs * teacher_probs.log().clamp(min=-100)).sum(dim=1).mean():.4f}")
+    
+    # Distill for 50 epochs (simulating 10 rounds × 5 distill_epochs)
+    n_target = len(teacher_probs)
+    for epoch in range(50):
+        student_model.train()
+        perm = torch.randperm(n_target)
+        epoch_loss = 0
+        n_batches = 0
+        for start in range(0, n_target, 256):
+            end = min(start + 256, n_target)
+            idx = perm[start:end]
+            data = public_images[idx].to(device)
+            target = teacher_probs[idx].to(device)
+            
+            student_logits = student_model(data)
+            loss = F.kl_div(
+                F.log_softmax(student_logits / T, dim=1),
+                target,
+                reduction='batchmean'
+            ) * (T * T)
+            
+            student_opt.zero_grad()
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(student_model.parameters(), 5.0)
+            student_opt.step()
+            epoch_loss += loss.item()
+            n_batches += 1
+        
+        if (epoch + 1) % 10 == 0:
+            student_model.eval()
+            correct = 0
+            total = 0
+            with torch.no_grad():
+                for data, target in test_loader:
+                    data, target = data.to(device), target.to(device)
+                    pred = student_model(data).argmax(dim=1)
+                    correct += (pred == target).sum().item()
+                    total += target.size(0)
+            acc = correct / total
+            print(f"  Distill epoch {epoch+1}/50: test_acc={acc:.4f}, loss={epoch_loss/n_batches:.4f}")
+    
+    distill_acc = acc
+    
+    # ================================================================
+    # Test 5: Distillation with noise (simulating FL)
+    # ================================================================
+    print("\n[Test 5] Distillation from noisy teacher (simulating FL aggregation)")
+    print("-" * 50)
+    
+    # Simulate: 35 devices, each contributes clipped logits, then average + noise
+    N_participants = 35
+    avg_eps = 0.5  # typical epsilon from game (gamma=5-7)
+    
+    # Simulate multiple devices by adding perturbation to teacher logits
+    all_device_logits = []
+    for i in range(N_participants):
+        # Each device has slightly different logits (simulating different models)
+        noise_per_device = torch.randn_like(teacher_logits) * 2.0  # model variation
+        dev_logits = teacher_logits + noise_per_device
+        dev_logits = torch.clamp(dev_logits, -C, C)
+        all_device_logits.append(dev_logits)
+    
+    # Average
+    agg_logits = sum(all_device_logits) / N_participants
+    
+    # Add Laplace noise
+    sensitivity = 2.0 * C / N_participants
+    noise_scale = sensitivity / avg_eps
+    noise = np.random.laplace(0, noise_scale, agg_logits.shape).astype(np.float32)
+    noisy_logits = agg_logits.numpy() + noise
+    noisy_probs = F.softmax(torch.from_numpy(noisy_logits).float() / T, dim=1)
+    
+    print(f"  N={N_participants}, avg_eps={avg_eps}, noise_scale={noise_scale:.4f}")
+    print(f"  Signal std: {agg_logits.std():.4f}, Noise std: {np.std(noise):.4f}")
+    print(f"  SNR: {agg_logits.std().item() / np.std(noise):.2f}")
+    
+    # Distill from noisy probs
+    student2 = get_model('resnet18', num_classes=100).to(device)
+    student2_opt = torch.optim.Adam(student2.parameters(), lr=0.001)
+    
+    for epoch in range(50):
+        student2.train()
+        perm = torch.randperm(n_target)
+        for start in range(0, n_target, 256):
+            end = min(start + 256, n_target)
+            idx = perm[start:end]
+            data = public_images[idx].to(device)
+            target = noisy_probs[idx].to(device)
+            
+            s_logits = student2(data)
+            loss = F.kl_div(
+                F.log_softmax(s_logits / T, dim=1),
+                target,
+                reduction='batchmean'
+            ) * (T * T)
+            
+            student2_opt.zero_grad()
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(student2.parameters(), 5.0)
+            student2_opt.step()
+        
+        if (epoch + 1) % 10 == 0:
+            student2.eval()
+            correct = 0
+            total = 0
+            with torch.no_grad():
+                for data, target in test_loader:
+                    data, target = data.to(device), target.to(device)
+                    pred = student2(data).argmax(dim=1)
+                    correct += (pred == target).sum().item()
+                    total += target.size(0)
+            acc = correct / total
+            print(f"  Noisy distill epoch {epoch+1}/50: test_acc={acc:.4f}")
+    
+    noisy_distill_acc = acc
+    
+    # ================================================================
+    # Test 6: Full FL simulation (small scale)
+    # ================================================================
+    print("\n[Test 6] Full FL simulation: 10 devices, 30 rounds, no noise")
+    print("-" * 50)
+    
+    server_model = get_model('resnet18', num_classes=100).to(device)
+    server_opt = torch.optim.Adam(server_model.parameters(), lr=0.001)
+    
+    # Create 10 local models
+    local_models = {}
+    local_opts = {}
+    for i in range(10):
+        m = get_model('resnet18', num_classes=100).to(device)
+        local_models[i] = m
+        local_opts[i] = torch.optim.SGD(m.parameters(), lr=0.01, momentum=0.9, weight_decay=5e-4)
+    
+    for round_idx in range(30):
+        # Each device trains 3 epochs (persistent)
+        for i in range(10):
+            if i not in client_loaders:
+                continue
+            local_models[i].train()
+            for ep in range(3):
+                for data, target in client_loaders[i]:
+                    data, target = data.to(device), target.to(device)
+                    local_opts[i].zero_grad()
+                    loss = criterion(local_models[i](data), target)
+                    loss.backward()
+                    local_opts[i].step()
+        
+        # Collect logits from all 10 devices on public data
+        device_logits_list = []
+        for i in range(10):
+            if i not in client_loaders:
+                continue
+            local_models[i].eval()
+            chunks = []
+            with torch.no_grad():
+                for data, _ in public_loader:
+                    data = data.to(device)
+                    logits = local_models[i](data)
+                    chunks.append(logits.cpu())
+            device_logits_list.append(torch.cat(chunks, dim=0))
+        
+        # Average logits (no noise, no clipping)
+        avg_logits = sum(device_logits_list) / len(device_logits_list)
+        teacher_p = F.softmax(avg_logits / T, dim=1)
+        
+        # Distill to server model
+        server_model.train()
+        n_t = len(teacher_p)
+        for ep in range(1):
+            perm = torch.randperm(n_t)
+            for start in range(0, n_t, 256):
+                end = min(start + 256, n_t)
+                idx = perm[start:end]
+                data = public_images[idx].to(device)
+                target = teacher_p[idx].to(device)
+                
+                s_logits = server_model(data)
+                loss = F.kl_div(
+                    F.log_softmax(s_logits / T, dim=1),
+                    target,
+                    reduction='batchmean'
+                ) * (T * T)
+                
+                server_opt.zero_grad()
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(server_model.parameters(), 5.0)
+                server_opt.step()
+        
+        # Eval
+        if (round_idx + 1) % 5 == 0:
+            server_model.eval()
+            correct = 0
+            total = 0
+            with torch.no_grad():
+                for data, target in test_loader:
+                    data, target = data.to(device), target.to(device)
+                    pred = server_model(data).argmax(dim=1)
+                    correct += (pred == target).sum().item()
+                    total += target.size(0)
+            acc = correct / total
+            print(f"  Round {round_idx+1}/30: server_acc={acc:.4f}")
+    
+    fl_acc = acc
+    
+    # ================================================================
+    # Summary
+    # ================================================================
+    print("\n" + "=" * 70)
+    print("DIAGNOSIS SUMMARY")
+    print("=" * 70)
+    print(f"  Test 1 - Centralized (48k samples, 10 epochs):  {centralized_acc:.4f}")
+    print(f"  Test 2 - Single device (960 samples, 100 epochs): {single_device_acc:.4f}")
+    print(f"  Test 4 - Distill from 1 teacher (no noise):      {distill_acc:.4f}")
+    print(f"  Test 5 - Distill from noisy aggregated:          {noisy_distill_acc:.4f}")
+    print(f"  Test 6 - Full FL (10 devices, 20 rounds, no noise): {fl_acc:.4f}")
+    print()
+    print("Bottleneck analysis:")
+    if centralized_acc < 0.30:
+        print("  ⚠️  Centralized training is weak — model/lr problem")
+    if single_device_acc < 0.10:
+        print("  ⚠️  Single device can't learn — data too small or lr wrong")
+    if distill_acc < 0.10:
+        print("  ⚠️  Distillation fails even without noise — pipeline issue")
+    if noisy_distill_acc < distill_acc * 0.5:
+        print("  ⚠️  Noise destroys signal — DP noise too strong")
+    if fl_acc < distill_acc * 0.5:
+        print("  ⚠️  FL loop doesn't converge — aggregation problem")
+
+
+if __name__ == '__main__':
+    diagnose()
