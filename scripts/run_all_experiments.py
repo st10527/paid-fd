@@ -370,9 +370,10 @@ def _create_method(method_name: str, model, config: dict, device: str):
             local_epochs=local_epochs,
             local_lr=local_lr,
             local_momentum=tc.get('local_momentum', 0.9),
-            distill_epochs=1,       # Conservative: 1 epoch/round for noisy labels
-            distill_lr=0.0001,      # Very low lr: noise averages out over 100 rounds
-            temperature=1.0,
+            distill_epochs=1,       # 1 epoch/round (EMA denoises labels)
+            distill_lr=0.001,       # Standard lr (safe: EMA logit buffer removes noise)
+            temperature=3.0,        # Soft labels (safe: EMA gives clean logits)
+            ema_beta=0.7,           # Logit buffer smoothing
             clip_bound=mc.get('clip_bound', 5.0),
             public_samples=mc.get('public_samples_per_round', 1000),
         )
@@ -384,9 +385,10 @@ def _create_method(method_name: str, model, config: dict, device: str):
             epsilon=eps,
             local_epochs=local_epochs,
             local_lr=local_lr,
-            distill_epochs=1,       # Conservative: 1 epoch/round for noisy labels
-            distill_lr=0.0001,      # Very low lr: noise averages out over 100 rounds
-            temperature=1.0,
+            distill_epochs=1,       # 1 epoch/round (EMA denoises labels)
+            distill_lr=0.001,       # Standard lr (safe: EMA logit buffer removes noise)
+            temperature=3.0,        # Soft labels (safe: EMA gives clean logits)
+            ema_beta=0.7,           # Logit buffer smoothing
             clip_bound=5.0,
             participation_rate=mc.get('participation_rate', 1.0),
             samples_per_device=mc.get('samples_per_device', 100),

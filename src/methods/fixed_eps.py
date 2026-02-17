@@ -39,10 +39,13 @@ class FixedEpsilonConfig:
     local_lr: float = 0.01
     local_momentum: float = 0.9
 
-    # Distillation (conservative for noisy labels)
+    # Distillation
     distill_epochs: int = 1
-    distill_lr: float = 0.0001   # Very low lr: prevents noisy teacher from degrading server
-    temperature: float = 1.0     # T=1: preserve peaked signal under DP noise
+    distill_lr: float = 0.001    # Standard Adam lr (safe because EMA denoises labels)
+    temperature: float = 3.0     # Soft labels (safe after EMA denoising)
+    
+    # EMA logit buffer
+    ema_beta: float = 0.7        # Smoothing factor
 
     # Pre-training on public data
     pretrain_epochs: int = 50
@@ -53,6 +56,7 @@ class FixedEpsilonConfig:
 
     # Participation
     participation_rate: float = 1.0
+    samples_per_device: int = 100  # Unused, kept for config compat
 
 
 class FixedEpsilon(FederatedMethod):
@@ -97,6 +101,9 @@ class FixedEpsilon(FederatedMethod):
         
         # Pre-training state
         self._pretrained = False
+        
+        # EMA logit buffer
+        self._logit_buffer = None
 
     def run_round(
         self,
@@ -204,11 +211,22 @@ class FixedEpsilon(FederatedMethod):
             noise_scale = sensitivity_per_elem / self.config.epsilon
             noise = np.random.laplace(0, noise_scale, aggregated_logits.shape)
             noisy_logits = aggregated_logits.numpy() + noise.astype(np.float32)
-
-            # Convert to teacher probs
-            T = self.config.temperature
             noisy_logits_tensor = torch.from_numpy(noisy_logits).float()
-            teacher_probs = F.softmax(noisy_logits_tensor / T, dim=1)
+
+            # EMA logit buffer: average out noise across rounds
+            beta = self.config.ema_beta
+            if self._logit_buffer is None:
+                self._logit_buffer = noisy_logits_tensor.clone()
+            else:
+                buf_len = min(len(self._logit_buffer), len(noisy_logits_tensor))
+                self._logit_buffer = (
+                    beta * self._logit_buffer[:buf_len]
+                    + (1 - beta) * noisy_logits_tensor[:buf_len]
+                )
+
+            # Convert SMOOTHED logits to teacher probs
+            T = self.config.temperature
+            teacher_probs = F.softmax(self._logit_buffer / T, dim=1)
 
             # Distill
             self._distill_to_server(teacher_probs, public_images[:min_len])

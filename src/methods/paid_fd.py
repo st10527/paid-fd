@@ -45,10 +45,14 @@ class PAIDFDConfig:
     local_lr: float = 0.01       # SGD fine-tuning lr (models start pre-trained)
     local_momentum: float = 0.9  # Standard SGD momentum
     
-    # Distillation (conservative for noisy labels)
-    distill_epochs: int = 1      # 1 epoch/round: small step, noise averages out over 100 rounds
-    distill_lr: float = 0.0001   # Very low lr: prevents noisy teacher from degrading server
-    temperature: float = 1.0     # T=1: preserve peaked signal under DP noise
+    # Distillation
+    distill_epochs: int = 1      # 1 epoch per round
+    distill_lr: float = 0.001    # Standard Adam lr (safe because EMA denoises labels)
+    temperature: float = 3.0     # Soft labels for richer signal (safe after EMA denoising)
+    
+    # EMA logit buffer: averages out Laplace noise across rounds
+    # After K rounds, noise variance reduces by ~(1-β)/β compared to single-round
+    ema_beta: float = 0.7        # Smoothing factor: 0.7 = effective window ~3 rounds
     
     # Pre-training on public data (FedMD "transfer learning" phase)
     pretrain_epochs: int = 50    # 50 epochs on public data (10k samples needs many passes)
@@ -122,6 +126,10 @@ class PAIDFD(FederatedMethod):
         
         # Pre-training state
         self._pretrained = False
+        
+        # EMA logit buffer: accumulates signal, cancels noise across rounds
+        # Laplace noise is zero-mean in logit space → EMA converges to true logits
+        self._logit_buffer = None  # Will be initialized on first round
         
         # Track statistics
         self.price_history = []
@@ -272,20 +280,32 @@ class PAIDFD(FederatedMethod):
             )
             
             # 3b. Add Laplace noise in LOGIT space
-            # Sensitivity per element: changing one device's logits by 2C
-            # affects the weighted average by at most (1/N)*2C
-            # (since max weight is ≤ 1 and logits are in [-C, C])
             sensitivity_per_elem = 2.0 * C / N
             noise_scale = sensitivity_per_elem / avg_eps
             noise = np.random.laplace(0, noise_scale, aggregated_logits.shape)
             noisy_logits = aggregated_logits.numpy() + noise.astype(np.float32)
-            
-            # 3c. Convert noisy logits to teacher probabilities via softmax
-            T = self.config.temperature
             noisy_logits_tensor = torch.from_numpy(noisy_logits).float()
-            teacher_probs = F.softmax(noisy_logits_tensor / T, dim=1)
             
-            # 3d. Distill to server model
+            # 3c. EMA logit buffer: average out noise across rounds
+            # Laplace noise is zero-mean in logit space, so EMA converges
+            # to true aggregated logits. After K rounds, noise variance
+            # reduces by factor ~(1-β)/(1+β) compared to single round.
+            beta = self.config.ema_beta
+            if self._logit_buffer is None:
+                self._logit_buffer = noisy_logits_tensor.clone()
+            else:
+                # Handle size changes (rare: different n_public)
+                buf_len = min(len(self._logit_buffer), len(noisy_logits_tensor))
+                self._logit_buffer = (
+                    beta * self._logit_buffer[:buf_len]
+                    + (1 - beta) * noisy_logits_tensor[:buf_len]
+                )
+            
+            # 3d. Convert SMOOTHED logits to teacher probabilities
+            T = self.config.temperature
+            teacher_probs = F.softmax(self._logit_buffer / T, dim=1)
+            
+            # 3e. Distill to server model
             self._distill_to_server(teacher_probs, public_images[:min_len])
         
         # Evaluate

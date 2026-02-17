@@ -284,20 +284,22 @@ def diagnose():
     distill_acc = acc
     
     # ================================================================
-    # Test 5: Distillation with noise (simulating FL)
+    # Test 5: Distillation with noise + EMA logit buffer (simulating PAID-FD)
     # ================================================================
-    print("\n[Test 5] Noisy distillation over 100 rounds (simulating actual PAID-FD)")
+    print("\n[Test 5] Noisy distillation + EMA logit buffer (100 rounds)")
     print("-" * 50)
     
-    # Simulate the REAL FL scenario:
-    # - 100 rounds, each round gets FRESH noisy labels (noise varies per round)
-    # - Conservative distillation: 1 epoch/round, lr=0.0001
-    # - This is what actually happens in PAID-FD
+    # Simulate the REAL FL scenario with EMA logit buffer:
+    # - 100 rounds, each round: fresh Laplace noise on aggregated logits
+    # - EMA buffer accumulates logits across rounds (noise cancels, signal stays)
+    # - Distill from smoothed buffer, NOT raw noisy logits
     N_participants = 35
     avg_eps = 0.5
-    T_noisy = 1.0
+    T_noisy = 3.0           # Safe to use T=3 because EMA denoises
+    ema_beta = 0.7           # EMA smoothing factor
+    distill_lr_noisy = 0.001 # Standard lr (safe because EMA gives clean targets)
     
-    # Simulate multiple devices by adding perturbation to teacher logits
+    # Simulate multiple devices
     all_device_logits = []
     for i in range(N_participants):
         noise_per_device = torch.randn_like(teacher_logits) * 2.0
@@ -310,27 +312,36 @@ def diagnose():
     sensitivity = 2.0 * C / N_participants
     noise_scale = sensitivity / avg_eps
     
-    print(f"  N={N_participants}, avg_eps={avg_eps}, noise_scale={noise_scale:.4f}, T={T_noisy}")
+    print(f"  N={N_participants}, avg_eps={avg_eps}, noise_scale={noise_scale:.4f}")
+    print(f"  T={T_noisy}, ema_beta={ema_beta}, distill_lr={distill_lr_noisy}")
     print(f"  Signal std: {agg_logits.std():.4f}")
-    print(f"  distill_lr=0.0001, distill_epochs=1/round, 100 rounds")
     
     student2 = copy.deepcopy(pretrain_model)
-    student2_opt = torch.optim.Adam(student2.parameters(), lr=0.0001)
+    student2_opt = torch.optim.Adam(student2.parameters(), lr=distill_lr_noisy)
+    logit_buffer = None  # EMA logit buffer
     
     for rnd in range(100):
         # Each round: fresh Laplace noise (different realization)
         noise = np.random.laplace(0, noise_scale, agg_logits.shape).astype(np.float32)
-        noisy_logits = agg_logits.numpy() + noise
-        noisy_probs = F.softmax(torch.from_numpy(noisy_logits).float() / T_noisy, dim=1)
+        noisy_logits = torch.from_numpy(agg_logits.numpy() + noise).float()
         
-        # 1 distill epoch per round (conservative)
+        # EMA logit buffer update (noise cancels across rounds)
+        if logit_buffer is None:
+            logit_buffer = noisy_logits.clone()
+        else:
+            logit_buffer = ema_beta * logit_buffer + (1 - ema_beta) * noisy_logits
+        
+        # Convert SMOOTHED logits to teacher probs
+        smoothed_probs = F.softmax(logit_buffer / T_noisy, dim=1)
+        
+        # 1 distill epoch per round
         student2.train()
         perm = torch.randperm(n_target)
         for start in range(0, n_target, 256):
             end = min(start + 256, n_target)
             idx = perm[start:end]
             data = augment(public_images[idx]).to(device)
-            target = noisy_probs[idx].to(device)
+            target = smoothed_probs[idx].to(device)
             
             s_logits = student2(data)
             loss = F.kl_div(
@@ -355,7 +366,9 @@ def diagnose():
                     correct += (pred == target).sum().item()
                     total += target.size(0)
             acc = correct / total
-            print(f"  Round {rnd+1}/100: test_acc={acc:.4f}")
+            # Also measure how close buffer is to true logits
+            buf_err = (logit_buffer - agg_logits).abs().mean().item()
+            print(f"  Round {rnd+1}/100: test_acc={acc:.4f}, buffer_err={buf_err:.4f}")
     
     noisy_distill_acc = acc
     
@@ -457,7 +470,7 @@ def diagnose():
     print(f"  Test 1 - Centralized (48k samples, 10 epochs):    {centralized_acc:.4f}")
     print(f"  Test 2 - Single device fine-tuned (from pretrain): {single_device_acc:.4f}")
     print(f"  Test 4 - Distill from 1 teacher (no noise, T=3):  {distill_acc:.4f}")
-    print(f"  Test 5 - Noisy distill (100 rnd, lr=1e-4):    {noisy_distill_acc:.4f}")
+    print(f"  Test 5 - Noisy distill + EMA (100 rnd, β=0.7):  {noisy_distill_acc:.4f}")
     print(f"  Test 6 - Full FL (10 dev, 30 rnd, pretrain, T=3): {fl_acc:.4f}")
     print()
     print("Bottleneck analysis:")
