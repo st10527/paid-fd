@@ -45,7 +45,7 @@ class FedMDConfig:
     local_lr: float = 0.01
     local_momentum: float = 0.9
 
-    # Distillation
+    # Distillation (aggressive is fine — no noise)
     distill_epochs: int = 5
     distill_lr: float = 0.001
     temperature: float = 3.0

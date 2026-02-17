@@ -45,9 +45,9 @@ class PAIDFDConfig:
     local_lr: float = 0.01       # SGD fine-tuning lr (models start pre-trained)
     local_momentum: float = 0.9  # Standard SGD momentum
     
-    # Distillation
-    distill_epochs: int = 5      # 5 epochs/round (safe with augmentation)
-    distill_lr: float = 0.001    # Adam lr for distillation (conservative)
+    # Distillation (conservative for noisy labels)
+    distill_epochs: int = 1      # 1 epoch/round: small step, noise averages out over 100 rounds
+    distill_lr: float = 0.0001   # Very low lr: prevents noisy teacher from degrading server
     temperature: float = 1.0     # T=1: preserve peaked signal under DP noise
     
     # Pre-training on public data (FedMD "transfer learning" phase)

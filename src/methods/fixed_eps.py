@@ -39,9 +39,9 @@ class FixedEpsilonConfig:
     local_lr: float = 0.01
     local_momentum: float = 0.9
 
-    # Distillation
-    distill_epochs: int = 5
-    distill_lr: float = 0.001
+    # Distillation (conservative for noisy labels)
+    distill_epochs: int = 1
+    distill_lr: float = 0.0001   # Very low lr: prevents noisy teacher from degrading server
     temperature: float = 1.0     # T=1: preserve peaked signal under DP noise
 
     # Pre-training on public data

@@ -286,42 +286,44 @@ def diagnose():
     # ================================================================
     # Test 5: Distillation with noise (simulating FL)
     # ================================================================
-    print("\n[Test 5] Distillation from noisy teacher (T=1.0, simulating PAID-FD)")
+    print("\n[Test 5] Noisy distillation over 100 rounds (simulating actual PAID-FD)")
     print("-" * 50)
     
-    # Simulate: 35 devices, each contributes clipped logits, then average + noise
+    # Simulate the REAL FL scenario:
+    # - 100 rounds, each round gets FRESH noisy labels (noise varies per round)
+    # - Conservative distillation: 1 epoch/round, lr=0.0001
+    # - This is what actually happens in PAID-FD
     N_participants = 35
-    avg_eps = 0.5  # typical epsilon from game (gamma=5-7)
-    T_noisy = 1.0  # T=1 for noisy methods — preserves peaked signal
+    avg_eps = 0.5
+    T_noisy = 1.0
     
     # Simulate multiple devices by adding perturbation to teacher logits
     all_device_logits = []
     for i in range(N_participants):
-        # Each device has slightly different logits (simulating different models)
-        noise_per_device = torch.randn_like(teacher_logits) * 2.0  # model variation
+        noise_per_device = torch.randn_like(teacher_logits) * 2.0
         dev_logits = teacher_logits + noise_per_device
         dev_logits = torch.clamp(dev_logits, -C, C)
         all_device_logits.append(dev_logits)
     
-    # Average
     agg_logits = sum(all_device_logits) / N_participants
     
-    # Add Laplace noise
     sensitivity = 2.0 * C / N_participants
     noise_scale = sensitivity / avg_eps
-    noise = np.random.laplace(0, noise_scale, agg_logits.shape).astype(np.float32)
-    noisy_logits = agg_logits.numpy() + noise
-    noisy_probs = F.softmax(torch.from_numpy(noisy_logits).float() / T_noisy, dim=1)
     
     print(f"  N={N_participants}, avg_eps={avg_eps}, noise_scale={noise_scale:.4f}, T={T_noisy}")
-    print(f"  Signal std: {agg_logits.std():.4f}, Noise std: {np.std(noise):.4f}")
-    print(f"  SNR: {agg_logits.std().item() / np.std(noise):.2f}")
+    print(f"  Signal std: {agg_logits.std():.4f}")
+    print(f"  distill_lr=0.0001, distill_epochs=1/round, 100 rounds")
     
-    # Distill from noisy probs (student starts from pre-trained checkpoint)
     student2 = copy.deepcopy(pretrain_model)
-    student2_opt = torch.optim.Adam(student2.parameters(), lr=0.001)
+    student2_opt = torch.optim.Adam(student2.parameters(), lr=0.0001)
     
-    for epoch in range(50):
+    for rnd in range(100):
+        # Each round: fresh Laplace noise (different realization)
+        noise = np.random.laplace(0, noise_scale, agg_logits.shape).astype(np.float32)
+        noisy_logits = agg_logits.numpy() + noise
+        noisy_probs = F.softmax(torch.from_numpy(noisy_logits).float() / T_noisy, dim=1)
+        
+        # 1 distill epoch per round (conservative)
         student2.train()
         perm = torch.randperm(n_target)
         for start in range(0, n_target, 256):
@@ -342,7 +344,7 @@ def diagnose():
             torch.nn.utils.clip_grad_norm_(student2.parameters(), 5.0)
             student2_opt.step()
         
-        if (epoch + 1) % 10 == 0:
+        if (rnd + 1) % 20 == 0:
             student2.eval()
             correct = 0
             total = 0
@@ -353,7 +355,7 @@ def diagnose():
                     correct += (pred == target).sum().item()
                     total += target.size(0)
             acc = correct / total
-            print(f"  Noisy distill epoch {epoch+1}/50: test_acc={acc:.4f}")
+            print(f"  Round {rnd+1}/100: test_acc={acc:.4f}")
     
     noisy_distill_acc = acc
     
@@ -455,7 +457,7 @@ def diagnose():
     print(f"  Test 1 - Centralized (48k samples, 10 epochs):    {centralized_acc:.4f}")
     print(f"  Test 2 - Single device fine-tuned (from pretrain): {single_device_acc:.4f}")
     print(f"  Test 4 - Distill from 1 teacher (no noise, T=3):  {distill_acc:.4f}")
-    print(f"  Test 5 - Distill from noisy aggregated (T=1):   {noisy_distill_acc:.4f}")
+    print(f"  Test 5 - Noisy distill (100 rnd, lr=1e-4):    {noisy_distill_acc:.4f}")
     print(f"  Test 6 - Full FL (10 dev, 30 rnd, pretrain, T=3): {fl_acc:.4f}")
     print()
     print("Bottleneck analysis:")
