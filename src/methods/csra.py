@@ -44,9 +44,9 @@ from ..models.utils import copy_model
 @dataclass
 class CSRAConfig:
     """Configuration for CSRA."""
-    # Local training (same as all methods for fair comparison)
-    local_epochs: int = 20
-    local_lr: float = 0.1
+    # Local training
+    local_epochs: int = 2
+    local_lr: float = 0.01
     local_momentum: float = 0.9
 
     # Reverse auction

@@ -39,13 +39,13 @@ from ..models.utils import copy_model
 @dataclass
 class FedMDConfig:
     """Configuration for FedMD."""
-    # Local training
-    local_epochs: int = 20
-    local_lr: float = 0.1
+    # Local training (per round — models persist across rounds)
+    local_epochs: int = 1
+    local_lr: float = 0.01
     local_momentum: float = 0.9
 
     # Distillation
-    distill_epochs: int = 10
+    distill_epochs: int = 5
     distill_lr: float = 0.005
     temperature: float = 3.0
 
@@ -53,7 +53,7 @@ class FedMDConfig:
     clip_bound: float = 5.0
 
     # Public data
-    public_samples: int = 10000
+    public_samples: int = 2000
 
 
 class FedMD(FederatedMethod):
@@ -92,6 +92,10 @@ class FedMD(FederatedMethod):
             lr=self.config.distill_lr,
             weight_decay=1e-4
         )
+        
+        # Persistent local models
+        self.local_models = {}
+        self.local_optimizers = {}
 
     def run_round(
         self,
@@ -123,15 +127,29 @@ class FedMD(FederatedMethod):
 
             participants.append(dev_id)
             local_loader = client_loaders[dev_id]
-            local_model = copy_model(self.server_model, device=self.device)
+            
+            # Get or create persistent local model
+            if dev_id not in self.local_models:
+                self.local_models[dev_id] = copy_model(self.server_model, device=self.device)
+                self.local_optimizers[dev_id] = torch.optim.SGD(
+                    self.local_models[dev_id].parameters(),
+                    lr=self.config.local_lr,
+                    momentum=self.config.local_momentum,
+                    weight_decay=5e-4
+                )
+            
+            local_model = self.local_models[dev_id]
+            local_optimizer = self.local_optimizers[dev_id]
 
-            # Local training
-            self.train_local(
-                local_model,
-                local_loader,
-                epochs=self.config.local_epochs,
-                lr=self.config.local_lr
-            )
+            # Local training (1 epoch, persistent model)
+            local_model.train()
+            criterion = nn.CrossEntropyLoss()
+            for data, target in local_loader:
+                data, target = data.to(self.device), target.to(self.device)
+                local_optimizer.zero_grad()
+                loss = criterion(local_model(data), target)
+                loss.backward()
+                local_optimizer.step()
 
             # Compute clipped logits on ALL public data (NO noise)
             local_model.eval()
@@ -156,8 +174,6 @@ class FedMD(FederatedMethod):
             )
             for k in ["training", "inference", "communication"]:
                 total_energy[k] += energy.get(k, 0)
-
-            del local_model
 
         # ── Aggregate: simple average (NO noise) ──
         if all_logits:

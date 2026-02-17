@@ -35,13 +35,13 @@ from ..models.utils import copy_model
 @dataclass
 class FedAvgConfig:
     """Configuration for FedAvg."""
-    # Local training
-    local_epochs: int = 20
-    local_lr: float = 0.1
+    # Local training (per round)
+    local_epochs: int = 2
+    local_lr: float = 0.01
     local_momentum: float = 0.9
 
     # Participation
-    participation_rate: float = 1.0  # Fraction of devices per round
+    participation_rate: float = 0.5  # Fraction of devices per round
 
     # Communication (for energy calculation)
     # ResNet-18: ~11.2M params × 4 bytes = ~44 MB

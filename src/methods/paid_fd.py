@@ -28,31 +28,32 @@ class PAIDFDConfig:
     """
     Configuration for PAID-FD.
     
-    Default values based on literature:
-    - local_epochs/lr: FedAvg (McMahan et al., 2017) typically uses 1-5 epochs, lr=0.01
-    - temperature: Knowledge Distillation (Hinton et al., 2015) suggests T=2-5
-    - distill_lr: Standard Adam default is 0.001, but KD often uses 0.01
+    Key design: persistent local models.
+    Each device keeps its own model across rounds and does 1 local epoch
+    per round. Over 100 rounds, this accumulates 100 epochs of training.
+    This is both faster (1 epoch vs 5) and produces better logits
+    (models improve over rounds instead of being re-initialized).
     """
-    # Game parameters (YOUR CONTRIBUTION - need tuning)
-    gamma: float = 500.0         # 【sweep結果】Server valuation coefficient
+    # Game parameters
+    gamma: float = 10.0          # Server valuation coefficient
     delta: float = 0.01          # Search tolerance
     budget: float = float('inf') # Budget constraint
     
-    # Local training (all methods use the same for fair comparison)
-    local_epochs: int = 20       # 【v4確認】充分本地訓練讓 logits 有品質
-    local_lr: float = 0.1        # 【v4確認】SGD with momentum on CIFAR-100
+    # Local training (per round — models persist across rounds)
+    local_epochs: int = 1        # 1 epoch per round × 100 rounds = 100 total
+    local_lr: float = 0.01       # SGD with momentum on CIFAR-100
     local_momentum: float = 0.9  # Standard SGD momentum
     
-    # Distillation (Literature: Hinton 2015, FedMD, FedDF)
-    distill_epochs: int = 10     # 配合 distill_lr=0.005 效果最好
-    distill_lr: float = 0.005    # 【sweep結果】0.005 最佳 (42.1% @R25)
+    # Distillation
+    distill_epochs: int = 5      # KD epochs per round
+    distill_lr: float = 0.005    # Adam lr for distillation
     temperature: float = 3.0     # Hinton suggests 2-5, we use 3
     
-    # Privacy (YOUR CONTRIBUTION)
+    # Privacy
     clip_bound: float = 5.0      # Logit clipping for LDP
     
     # Public data
-    public_samples: int = 1000   # Samples per round
+    public_samples: int = 2000   # Samples per round for logit computation
 
 
 class PAIDFD(FederatedMethod):
@@ -109,6 +110,11 @@ class PAIDFD(FederatedMethod):
             lr=self.config.distill_lr,
             weight_decay=1e-4
         )
+        
+        # Persistent local models: each device keeps its own model across rounds
+        # Initialized lazily on first participation
+        self.local_models = {}      # dev_id -> nn.Module
+        self.local_optimizers = {}  # dev_id -> optimizer
         
         # Track statistics
         self.price_history = []
@@ -188,15 +194,29 @@ class PAIDFD(FederatedMethod):
                 continue
             
             local_loader = client_loaders[dev_id]
-            local_model = copy_model(self.server_model, device=self.device)
             
-            # Local training on private data
-            self.train_local(
-                local_model,
-                local_loader,
-                epochs=self.config.local_epochs,
-                lr=self.config.local_lr
-            )
+            # Get or create persistent local model for this device
+            if dev_id not in self.local_models:
+                self.local_models[dev_id] = copy_model(self.server_model, device=self.device)
+                self.local_optimizers[dev_id] = torch.optim.SGD(
+                    self.local_models[dev_id].parameters(),
+                    lr=self.config.local_lr,
+                    momentum=self.config.local_momentum,
+                    weight_decay=5e-4
+                )
+            
+            local_model = self.local_models[dev_id]
+            local_optimizer = self.local_optimizers[dev_id]
+            
+            # Local training on private data (1 epoch with persistent model)
+            local_model.train()
+            criterion = nn.CrossEntropyLoss()
+            for data, target in local_loader:
+                data, target = data.to(self.device), target.to(self.device)
+                local_optimizer.zero_grad()
+                loss = criterion(local_model(data), target)
+                loss.backward()
+                local_optimizer.step()
             
             # Compute CLIPPED logits on ALL public data
             local_model.eval()
@@ -225,8 +245,6 @@ class PAIDFD(FederatedMethod):
             )
             for k in ["training", "inference", "communication"]:
                 total_energy[k] += energy.get(k, 0)
-            
-            del local_model
         
         # Stage 3: Aggregate logits, add noise, distill
         if all_logits:

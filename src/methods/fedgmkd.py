@@ -51,8 +51,8 @@ from ..models.utils import copy_model
 class FedGMKDConfig:
     """Configuration for FedGMKD."""
     # Local training
-    local_epochs: int = 20
-    local_lr: float = 0.1
+    local_epochs: int = 2
+    local_lr: float = 0.01
     local_momentum: float = 0.9
 
     # Knowledge distillation weights (Eq.13 in paper)
