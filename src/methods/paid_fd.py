@@ -42,13 +42,17 @@ class PAIDFDConfig:
     
     # Local training (per round — models persist across rounds)
     local_epochs: int = 3        # 3 epochs/round for better logits, persistent model
-    local_lr: float = 0.05       # SGD with momentum on CIFAR-100
+    local_lr: float = 0.01       # SGD fine-tuning lr (models start pre-trained)
     local_momentum: float = 0.9  # Standard SGD momentum
     
     # Distillation
     distill_epochs: int = 5      # 5 epochs/round (safe with augmentation)
     distill_lr: float = 0.001    # Adam lr for distillation (conservative)
-    temperature: float = 1.0     # T=1: preserve signal from noisy logits
+    temperature: float = 3.0     # T=3: spread probability mass for richer soft labels
+    
+    # Pre-training on public data (FedMD "transfer learning" phase)
+    pretrain_epochs: int = 10    # Epochs to pre-train on public data before FL
+    pretrain_lr: float = 0.1     # Standard SGD lr for pre-training
     
     # Privacy
     clip_bound: float = 5.0      # Logit clipping for LDP
@@ -116,6 +120,9 @@ class PAIDFD(FederatedMethod):
         self.local_models = {}      # dev_id -> nn.Module
         self.local_optimizers = {}  # dev_id -> optimizer
         
+        # Pre-training state
+        self._pretrained = False
+        
         # Track statistics
         self.price_history = []
         self.participation_history = []
@@ -142,6 +149,11 @@ class PAIDFD(FederatedMethod):
             RoundResult with metrics
         """
         self.current_round = round_idx
+        
+        # ── Pre-train on public data (once, before first FL round) ──
+        if not self._pretrained:
+            self._pretrain_on_public(public_loader)
+            self._pretrained = True
         
         # Stage 1: Server computes optimal price
         game_result = self.solver.solve(devices)
@@ -335,6 +347,54 @@ class PAIDFD(FederatedMethod):
         )
         
         return aggregated
+    
+    def _pretrain_on_public(self, public_loader):
+        """
+        Pre-train server model on public data (FedMD "transfer learning" phase).
+        
+        This gives every model a ~30-35% starting accuracy on CIFAR-100 before
+        FL begins, so local models produce meaningful logits from round 1.
+        Without this, each device's 800 non-IID samples can only reach ~12%
+        and distillation from 12%-accurate teachers transfers nothing.
+        """
+        print(f"  [Pre-training] {self.config.pretrain_epochs} epochs on public data ...")
+        
+        # Augmentation for pre-training
+        augment = transforms.Compose([
+            transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
+            transforms.RandomHorizontalFlip(),
+        ])
+        
+        optimizer = torch.optim.SGD(
+            self.server_model.parameters(),
+            lr=self.config.pretrain_lr,
+            momentum=0.9,
+            weight_decay=5e-4
+        )
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=self.config.pretrain_epochs
+        )
+        criterion = nn.CrossEntropyLoss()
+        
+        for epoch in range(self.config.pretrain_epochs):
+            self.server_model.train()
+            epoch_loss = 0.0
+            n_batches = 0
+            for data, target in public_loader:
+                data = augment(data).to(self.device)
+                target = target.to(self.device)
+                optimizer.zero_grad()
+                loss = criterion(self.server_model(data), target)
+                loss.backward()
+                optimizer.step()
+                epoch_loss += loss.item()
+                n_batches += 1
+            scheduler.step()
+            if (epoch + 1) % 5 == 0 or epoch == 0:
+                print(f"    Epoch {epoch+1}/{self.config.pretrain_epochs}: "
+                      f"loss={epoch_loss/n_batches:.4f}")
+        
+        print(f"  [Pre-training] Done. All local models will start from this checkpoint.")
     
     def _distill_to_server(
         self,

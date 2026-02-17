@@ -13,6 +13,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.transforms as transforms
 import numpy as np
+import copy
 import time
 
 def diagnose():
@@ -72,9 +73,53 @@ def diagnose():
     print(f"  >> Centralized baseline: {centralized_acc:.4f}")
     
     # ================================================================
-    # Test 2: Single device local training (960 samples, non-IID)
+    # Pre-training on public data (FedMD "transfer learning" phase)
     # ================================================================
-    print("\n[Test 2] Single device training (960 samples, non-IID, 100 epochs)")
+    print("\n[Pre-training] Pre-train base model on public data (10 epochs)")
+    print("-" * 50)
+    
+    augment = transforms.Compose([
+        transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
+        transforms.RandomHorizontalFlip(),
+    ])
+    
+    pretrain_model = get_model('resnet18', num_classes=100).to(device)
+    pt_opt = torch.optim.SGD(pretrain_model.parameters(), lr=0.1, momentum=0.9, weight_decay=5e-4)
+    pt_sched = torch.optim.lr_scheduler.CosineAnnealingLR(pt_opt, T_max=10)
+    
+    public_loader = DataLoader(public_set, batch_size=256, shuffle=True,
+                               num_workers=4, pin_memory=True)
+    
+    for epoch in range(10):
+        pretrain_model.train()
+        for data, target in public_loader:
+            data = augment(data).to(device)
+            target = target.to(device)
+            pt_opt.zero_grad()
+            loss = criterion(pretrain_model(data), target)
+            loss.backward()
+            pt_opt.step()
+        pt_sched.step()
+        
+        pretrain_model.eval()
+        correct = 0
+        total = 0
+        with torch.no_grad():
+            for data, target in test_loader:
+                data, target = data.to(device), target.to(device)
+                pred = pretrain_model(data).argmax(dim=1)
+                correct += (pred == target).sum().item()
+                total += target.size(0)
+        acc = correct / total
+        print(f"  Epoch {epoch+1}/10: acc={acc:.4f}")
+    
+    pretrain_acc = acc
+    print(f"  >> Pre-trained baseline (10k public only): {pretrain_acc:.4f}")
+    
+    # ================================================================
+    # Test 2: Single device fine-tuning FROM PRE-TRAINED (non-IID)
+    # ================================================================
+    print("\n[Test 2] Single device fine-tuning (960 samples, non-IID, 50 epochs, FROM pre-trained)")
     print("-" * 50)
     
     from src.data.partition import DirichletPartitioner, create_client_loaders
@@ -86,15 +131,15 @@ def diagnose():
     client_indices = partitioner.partition(private_set, targets)
     client_loaders = create_client_loaders(private_set, client_indices, batch_size=128)
     
-    # Pick a device with average data
+    # Pick a device with average data — start FROM pre-trained model
     dev_id = 0
-    local_model = get_model('resnet18', num_classes=100).to(device)
-    local_opt = torch.optim.SGD(local_model.parameters(), lr=0.05, momentum=0.9, weight_decay=5e-4)
+    local_model = copy.deepcopy(pretrain_model)
+    local_opt = torch.optim.SGD(local_model.parameters(), lr=0.01, momentum=0.9, weight_decay=5e-4)
     local_loader = client_loaders[dev_id]
     
     print(f"  Device {dev_id}: {len(client_indices[dev_id])} samples")
     
-    for epoch in range(100):
+    for epoch in range(50):
         local_model.train()
         for data, target in local_loader:
             data, target = data.to(device), target.to(device)
@@ -103,7 +148,7 @@ def diagnose():
             loss.backward()
             local_opt.step()
         
-        if (epoch + 1) % 20 == 0:
+        if (epoch + 1) % 10 == 0:
             local_model.eval()
             correct = 0
             total = 0
@@ -114,20 +159,20 @@ def diagnose():
                     correct += (pred == target).sum().item()
                     total += target.size(0)
             acc = correct / total
-            print(f"  Epoch {epoch+1}/100: test_acc={acc:.4f}")
+            print(f"  Epoch {epoch+1}/50: test_acc={acc:.4f}")
     
     single_device_acc = acc
     
     # ================================================================
-    # Test 3: Logit quality from local model
+    # Test 3: Logit quality from local model (fine-tuned from pre-trained)
     # ================================================================
-    print("\n[Test 3] Logit quality analysis")
+    print("\n[Test 3] Logit quality analysis (pre-trained + fine-tuned model)")
     print("-" * 50)
     
     public_loader = DataLoader(public_set, batch_size=256, shuffle=False,
                                num_workers=4, pin_memory=True)
     
-    # Get logits from the trained local model
+    # Get logits from the fine-tuned local model
     local_model.eval()
     all_logits = []
     all_labels = []
@@ -164,12 +209,13 @@ def diagnose():
     print("\n[Test 4] Distillation from perfect teacher (no noise, no FL)")
     print("-" * 50)
     
-    # Use the local model as teacher, distill to a fresh student
+    # Use the fine-tuned local model as teacher, distill to a student
+    # Student starts from pre-trained checkpoint (same as actual FL)
     teacher_model = local_model
-    student_model = get_model('resnet18', num_classes=100).to(device)
+    student_model = copy.deepcopy(pretrain_model)
     student_opt = torch.optim.Adam(student_model.parameters(), lr=0.001)
     
-    T = 1.0
+    T = 3.0  # Higher temperature extracts richer inter-class info
     teacher_model.eval()
     
     # Get teacher soft labels on public data
@@ -269,8 +315,8 @@ def diagnose():
     print(f"  Signal std: {agg_logits.std():.4f}, Noise std: {np.std(noise):.4f}")
     print(f"  SNR: {agg_logits.std().item() / np.std(noise):.2f}")
     
-    # Distill from noisy probs
-    student2 = get_model('resnet18', num_classes=100).to(device)
+    # Distill from noisy probs (student starts from pre-trained checkpoint)
+    student2 = copy.deepcopy(pretrain_model)
     student2_opt = torch.optim.Adam(student2.parameters(), lr=0.001)
     
     for epoch in range(50):
@@ -315,16 +361,16 @@ def diagnose():
     print("\n[Test 6] Full FL simulation: 10 devices, 30 rounds, no noise")
     print("-" * 50)
     
-    server_model = get_model('resnet18', num_classes=100).to(device)
+    server_model = copy.deepcopy(pretrain_model)  # Start from pre-trained
     server_opt = torch.optim.Adam(server_model.parameters(), lr=0.001)
     
-    # Create 10 local models
+    # Create 10 local models — ALL start from pre-trained checkpoint
     local_models = {}
     local_opts = {}
     for i in range(10):
-        m = get_model('resnet18', num_classes=100).to(device)
+        m = copy.deepcopy(pretrain_model)
         local_models[i] = m
-        local_opts[i] = torch.optim.SGD(m.parameters(), lr=0.05, momentum=0.9, weight_decay=5e-4)
+        local_opts[i] = torch.optim.SGD(m.parameters(), lr=0.01, momentum=0.9, weight_decay=5e-4)
     
     for round_idx in range(30):
         # Each device trains 3 epochs (persistent)
@@ -403,23 +449,30 @@ def diagnose():
     print("\n" + "=" * 70)
     print("DIAGNOSIS SUMMARY")
     print("=" * 70)
-    print(f"  Test 1 - Centralized (48k samples, 10 epochs):  {centralized_acc:.4f}")
-    print(f"  Test 2 - Single device (960 samples, 100 epochs): {single_device_acc:.4f}")
-    print(f"  Test 4 - Distill from 1 teacher (no noise):      {distill_acc:.4f}")
-    print(f"  Test 5 - Distill from noisy aggregated:          {noisy_distill_acc:.4f}")
-    print(f"  Test 6 - Full FL (10 devices, 20 rounds, no noise): {fl_acc:.4f}")
+    print(f"  Pre-train - Public data only (10k, 10 epochs):    {pretrain_acc:.4f}")
+    print(f"  Test 1 - Centralized (48k samples, 10 epochs):    {centralized_acc:.4f}")
+    print(f"  Test 2 - Single device fine-tuned (from pretrain): {single_device_acc:.4f}")
+    print(f"  Test 4 - Distill from 1 teacher (no noise, T=3):  {distill_acc:.4f}")
+    print(f"  Test 5 - Distill from noisy aggregated (T=3):     {noisy_distill_acc:.4f}")
+    print(f"  Test 6 - Full FL (10 dev, 30 rnd, pretrain, T=3): {fl_acc:.4f}")
     print()
     print("Bottleneck analysis:")
+    if pretrain_acc < 0.20:
+        print("  ⚠️  Pre-training too weak — public data insufficient")
     if centralized_acc < 0.30:
         print("  ⚠️  Centralized training is weak — model/lr problem")
-    if single_device_acc < 0.10:
-        print("  ⚠️  Single device can't learn — data too small or lr wrong")
-    if distill_acc < 0.10:
-        print("  ⚠️  Distillation fails even without noise — pipeline issue")
+    if single_device_acc < pretrain_acc:
+        print("  ⚠️  Fine-tuning hurts — catastrophic forgetting on non-IID")
+    if distill_acc < pretrain_acc:
+        print("  ⚠️  Distillation fails — teacher too weak or pipeline issue")
     if noisy_distill_acc < distill_acc * 0.5:
         print("  ⚠️  Noise destroys signal — DP noise too strong")
-    if fl_acc < distill_acc * 0.5:
-        print("  ⚠️  FL loop doesn't converge — aggregation problem")
+    if fl_acc > pretrain_acc * 1.2:
+        print("  ✅  FL + distillation improves over pre-training!")
+    elif fl_acc > pretrain_acc:
+        print("  🟡  FL marginally improves over pre-training")
+    else:
+        print("  ⚠️  FL doesn't improve over pre-training alone")
 
 
 if __name__ == '__main__':

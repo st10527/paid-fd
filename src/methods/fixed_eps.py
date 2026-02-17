@@ -36,13 +36,17 @@ class FixedEpsilonConfig:
 
     # Local training (per round — models persist across rounds)
     local_epochs: int = 3
-    local_lr: float = 0.05
+    local_lr: float = 0.01
     local_momentum: float = 0.9
 
     # Distillation
     distill_epochs: int = 5
     distill_lr: float = 0.001
-    temperature: float = 1.0
+    temperature: float = 3.0
+
+    # Pre-training on public data
+    pretrain_epochs: int = 10
+    pretrain_lr: float = 0.1
 
     # Privacy
     clip_bound: float = 5.0
@@ -90,6 +94,9 @@ class FixedEpsilon(FederatedMethod):
         # Persistent local models
         self.local_models = {}
         self.local_optimizers = {}
+        
+        # Pre-training state
+        self._pretrained = False
 
     def run_round(
         self,
@@ -101,6 +108,11 @@ class FixedEpsilon(FederatedMethod):
     ) -> RoundResult:
         """Execute one round of Fixed-ε FD."""
         self.current_round = round_idx
+
+        # ── Pre-train on public data (once, before first FL round) ──
+        if not self._pretrained:
+            self._pretrain_on_public(public_loader)
+            self._pretrained = True
 
         # Select participants
         n_devices = len(devices)
@@ -226,6 +238,35 @@ class FixedEpsilon(FederatedMethod):
 
         self.round_history.append(result)
         return result
+
+    def _pretrain_on_public(self, public_loader):
+        """Pre-train server model on public data (same as PAID-FD)."""
+        print(f"  [Fixed-eps Pre-training] {self.config.pretrain_epochs} epochs on public data ...")
+        augment = transforms.Compose([
+            transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
+            transforms.RandomHorizontalFlip(),
+        ])
+        optimizer = torch.optim.SGD(
+            self.server_model.parameters(),
+            lr=self.config.pretrain_lr, momentum=0.9, weight_decay=5e-4
+        )
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=self.config.pretrain_epochs
+        )
+        criterion = nn.CrossEntropyLoss()
+        for epoch in range(self.config.pretrain_epochs):
+            self.server_model.train()
+            for data, target in public_loader:
+                data = augment(data).to(self.device)
+                target = target.to(self.device)
+                optimizer.zero_grad()
+                loss = criterion(self.server_model(data), target)
+                loss.backward()
+                optimizer.step()
+            scheduler.step()
+            if (epoch + 1) % 5 == 0 or epoch == 0:
+                print(f"    Epoch {epoch+1}/{self.config.pretrain_epochs}")
+        print(f"  [Fixed-eps Pre-training] Done.")
 
     def _distill_to_server(
         self,
