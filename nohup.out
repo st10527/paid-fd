@@ -447,3 +447,924 @@ Phase 1.1: Gamma Sensitivity Analysis
 ======================================================================
 🏁 All done! Total time: 153367s (2556.1 min)
 ======================================================================
+============================================================
+  PAID-FD Parallel Experiment Runner
+  Device: cuda:0 | Rounds: 100 | Seeds: 42 123 456
+  Started: Mon Feb 16 09:04:34 PM CST 2026
+============================================================
+
+>>> Step 1/3: Running Phase 1.1 (all seeds, sequential)...
+🖥️  Device: cuda:0
+🎲 Seeds: [42, 123, 456]
+🔄 Rounds: 100
+
+======================================================================
+Phase 1.1: Gamma Sensitivity Analysis
+======================================================================
+
+--- Gamma = 3 ---
+  Seed 42:
+[TMC Safe Mode] Split Report:
+  Public (Server):  5000 samples (from Train)
+  Private (Users):  45000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+    Round   0/100: acc=0.0314, loss=4.4627, part=0.38
+Traceback (most recent call last):
+  File "/home/aelab-3/TMC_2026/paid-fd/scripts/run_all_experiments.py", line 1064, in <module>
+    main()
+  File "/home/aelab-3/TMC_2026/paid-fd/scripts/run_all_experiments.py", line 1046, in main
+    runner(device, args.seeds, args.rounds, args.quick)
+  File "/home/aelab-3/TMC_2026/paid-fd/scripts/run_all_experiments.py", line 472, in run_phase1_gamma
+    run = run_single_experiment('PAID-FD', config, seed, device, n_rounds)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/aelab-3/TMC_2026/paid-fd/scripts/run_all_experiments.py", line 298, in run_single_experiment
+    result = method.run_round(
+             ^^^^^^^^^^^^^^^^^
+  File "/home/aelab-3/TMC_2026/paid-fd/src/methods/paid_fd.py", line 194, in run_round
+    self.train_local(
+  File "/home/aelab-3/TMC_2026/paid-fd/src/methods/base.py", line 152, in train_local
+    for data, target in train_loader:
+  File "/home/aelab-3/.local/lib/python3.12/site-packages/torch/utils/data/dataloader.py", line 732, in __next__
+    data = self._next_data()
+           ^^^^^^^^^^^^^^^^^
+  File "/home/aelab-3/.local/lib/python3.12/site-packages/torch/utils/data/dataloader.py", line 788, in _next_data
+    data = self._dataset_fetcher.fetch(index)  # may raise StopIteration
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/aelab-3/.local/lib/python3.12/site-packages/torch/utils/data/_utils/fetch.py", line 50, in fetch
+    data = self.dataset.__getitems__(possibly_batched_index)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/aelab-3/.local/lib/python3.12/site-packages/torch/utils/data/dataset.py", line 416, in __getitems__
+    return [self.dataset[self.indices[idx]] for idx in indices]
+            ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/home/aelab-3/.local/lib/python3.12/site-packages/torchvision/datasets/cifar.py", line 119, in __getitem__
+    img = self.transform(img)
+          ^^^^^^^^^^^^^^^^^^^
+  File "/home/aelab-3/.local/lib/python3.12/site-packages/torchvision/transforms/transforms.py", line 95, in __call__
+    img = t(img)
+          ^^^^^^
+  File "/home/aelab-3/.local/lib/python3.12/site-packages/torchvision/transforms/transforms.py", line 137, in __call__
+    return F.to_tensor(pic)
+           ^^^^^^^^^^^^^^^^
+  File "/home/aelab-3/.local/lib/python3.12/site-packages/torchvision/transforms/functional.py", line 174, in to_tensor
+    img = img.permute((2, 0, 1)).contiguous()
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt
+============================================================
+  PAID-FD Parallel Experiment Runner
+  Device: cuda:0 | Rounds: 100 | Seeds: 42 123 456
+  Started: Mon Feb 16 09:06:11 PM CST 2026
+============================================================
+
+>>> Step 1/3: Running Phase 1.1 (all seeds, sequential)...
+🖥️  Device: cuda:0
+🎲 Seeds: [42, 123, 456]
+🔄 Rounds: 100
+
+======================================================================
+Phase 1.1: Gamma Sensitivity Analysis
+======================================================================
+
+--- Gamma = 3 ---
+  Seed 42:
+[TMC Safe Mode] Split Report:
+  Public (Server):  5000 samples (from Train)
+  Private (Users):  45000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+    Round   0/100: acc=0.0314, loss=4.4627, part=0.38
+    Round  10/100: acc=0.0994, loss=3.8582, part=0.38
+    Round  20/100: acc=0.1144, loss=3.7337, part=0.38
+    Round  30/100: acc=0.1306, loss=3.6536, part=0.38
+    Round  40/100: acc=0.1390, loss=3.5762, part=0.38
+    Round  50/100: acc=0.1444, loss=3.5009, part=0.38
+    Round  60/100: acc=0.1634, loss=3.4059, part=0.38
+    Round  70/100: acc=0.1736, loss=3.3478, part=0.38
+    Round  80/100: acc=0.1800, loss=3.3108, part=0.38
+    Round  90/100: acc=0.1794, loss=3.3002, part=0.38
+    Round  99/100: acc=0.1804, loss=3.2888, part=0.38
+  Seed 123:
+[TMC Safe Mode] Split Report:
+  Public (Server):  5000 samples (from Train)
+  Private (Users):  45000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+    Round   0/100: acc=0.0392, loss=4.4310, part=0.38
+    Round  10/100: acc=0.0968, loss=3.8549, part=0.38
+    Round  20/100: acc=0.1081, loss=3.7418, part=0.38
+    Round  30/100: acc=0.1176, loss=3.6692, part=0.38
+    Round  40/100: acc=0.1333, loss=3.5870, part=0.38
+    Round  50/100: acc=0.1412, loss=3.5272, part=0.38
+    Round  60/100: acc=0.1492, loss=3.4512, part=0.38
+    Round  70/100: acc=0.1645, loss=3.4224, part=0.38
+    Round  80/100: acc=0.1762, loss=3.3298, part=0.38
+    Round  90/100: acc=0.1824, loss=3.2745, part=0.38
+    Round  99/100: acc=0.1796, loss=3.2681, part=0.38
+  Seed 456:
+[TMC Safe Mode] Split Report:
+  Public (Server):  5000 samples (from Train)
+  Private (Users):  45000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+    Round   0/100: acc=0.0350, loss=4.4457, part=0.38
+    Round  10/100: acc=0.0990, loss=3.8815, part=0.38
+    Round  20/100: acc=0.1057, loss=3.8013, part=0.38
+    Round  30/100: acc=0.1177, loss=3.7273, part=0.38
+    Round  40/100: acc=0.1249, loss=3.6606, part=0.38
+    Round  50/100: acc=0.1404, loss=3.5730, part=0.38
+    Round  60/100: acc=0.1476, loss=3.5161, part=0.38
+    Round  70/100: acc=0.1537, loss=3.4427, part=0.38
+    Round  80/100: acc=0.1638, loss=3.4194, part=0.38
+    Round  90/100: acc=0.1718, loss=3.3767, part=0.38
+    Round  99/100: acc=0.1781, loss=3.3477, part=0.38
+
+--- Gamma = 5 ---
+  Seed 42:
+[TMC Safe Mode] Split Report:
+  Public (Server):  5000 samples (from Train)
+  Private (Users):  45000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+    Round   0/100: acc=0.0446, loss=4.4220, part=0.70
+    Round  10/100: acc=0.1093, loss=3.8337, part=0.70
+    Round  20/100: acc=0.1115, loss=3.7551, part=0.70
+    Round  30/100: acc=0.1252, loss=3.6942, part=0.70
+    Round  40/100: acc=0.1280, loss=3.6211, part=0.70
+    Round  50/100: acc=0.1385, loss=3.5633, part=0.70
+    Round  60/100: acc=0.1492, loss=3.4734, part=0.70
+    Round  70/100: acc=0.1506, loss=3.4637, part=0.70
+    Round  80/100: acc=0.1693, loss=3.3559, part=0.70
+    Round  90/100: acc=0.1776, loss=3.3040, part=0.70
+    Round  99/100: acc=0.1911, loss=3.2704, part=0.70
+  Seed 123:
+[TMC Safe Mode] Split Report:
+  Public (Server):  5000 samples (from Train)
+  Private (Users):  45000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+    Round   0/100: acc=0.0425, loss=4.3969, part=0.66
+    Round  10/100: acc=0.0941, loss=3.8598, part=0.66
+    Round  20/100: acc=0.1105, loss=3.7733, part=0.66
+    Round  30/100: acc=0.1190, loss=3.7060, part=0.66
+    Round  40/100: acc=0.1296, loss=3.6475, part=0.66
+    Round  50/100: acc=0.1277, loss=3.6053, part=0.66
+    Round  60/100: acc=0.1331, loss=3.5589, part=0.66
+    Round  70/100: acc=0.1388, loss=3.5119, part=0.66
+    Round  80/100: acc=0.1501, loss=3.4595, part=0.66
+    Round  90/100: acc=0.1597, loss=3.4037, part=0.66
+    Round  99/100: acc=0.1583, loss=3.3784, part=0.66
+  Seed 456:
+[TMC Safe Mode] Split Report:
+  Public (Server):  5000 samples (from Train)
+  Private (Users):  45000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+    Round   0/100: acc=0.0437, loss=4.4228, part=0.66
+    Round  10/100: acc=0.1032, loss=3.8290, part=0.66
+    Round  20/100: acc=0.1217, loss=3.7304, part=0.66
+    Round  30/100: acc=0.1329, loss=3.6534, part=0.66
+    Round  40/100: acc=0.1375, loss=3.5757, part=0.66
+    Round  50/100: acc=0.1567, loss=3.4824, part=0.66
+    Round  60/100: acc=0.1605, loss=3.4345, part=0.66
+    Round  70/100: acc=0.1665, loss=3.3961, part=0.66
+    Round  80/100: acc=0.1738, loss=3.3838, part=0.66
+    Round  90/100: acc=0.1705, loss=3.3776, part=0.66
+    Round  99/100: acc=0.1765, loss=3.3673, part=0.66
+
+--- Gamma = 7 ---
+  Seed 42:
+[TMC Safe Mode] Split Report:
+  Public (Server):  5000 samples (from Train)
+  Private (Users):  45000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+Terminated
+============================================================
+  PAID-FD Parallel Experiment Runner
+  Device: cuda:0 | Rounds: 100 | Seeds: 42 123 456
+  Started: Tue Feb 17 09:27:35 AM CST 2026
+============================================================
+
+>>> Step 1/3: Running Phase 1.1 (all seeds, sequential)...
+🖥️  Device: cuda:0
+🎲 Seeds: [42, 123, 456]
+🔄 Rounds: 100
+
+======================================================================
+Phase 1.1: Gamma Sensitivity Analysis
+======================================================================
+
+--- Gamma = 3 ---
+  Seed 42:
+[TMC Safe Mode] Split Report:
+  Public (Server):  2000 samples (from Train)
+  Private (Users):  48000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+    Round   0/100: acc=0.0095, loss=4.6097, part=0.38
+    Round  10/100: acc=0.0639, loss=4.1740, part=0.38
+    Round  20/100: acc=0.0770, loss=3.9639, part=0.38
+    Round  30/100: acc=0.0936, loss=3.8373, part=0.38
+    Round  40/100: acc=0.1100, loss=3.7553, part=0.38
+    Round  50/100: acc=0.1148, loss=3.6913, part=0.38
+    Round  60/100: acc=0.1131, loss=3.7079, part=0.38
+    Round  70/100: acc=0.1370, loss=3.6155, part=0.38
+    Round  80/100: acc=0.1305, loss=3.6179, part=0.38
+    Round  90/100: acc=0.1385, loss=3.5933, part=0.38
+    Round  99/100: acc=0.1359, loss=3.5945, part=0.38
+  Seed 123:
+[TMC Safe Mode] Split Report:
+  Public (Server):  2000 samples (from Train)
+  Private (Users):  48000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+    Round   0/100: acc=0.0101, loss=4.6502, part=0.38
+    Round  10/100: acc=0.0591, loss=4.1976, part=0.38
+    Round  20/100: acc=0.0966, loss=3.9496, part=0.38
+    Round  30/100: acc=0.1129, loss=3.8440, part=0.38
+    Round  40/100: acc=0.1125, loss=3.7671, part=0.38
+    Round  50/100: acc=0.1374, loss=3.6787, part=0.38
+    Round  60/100: acc=0.1387, loss=3.6513, part=0.38
+    Round  70/100: acc=0.1432, loss=3.6229, part=0.38
+    Round  80/100: acc=0.1420, loss=3.6129, part=0.38
+    Round  90/100: acc=0.1477, loss=3.6011, part=0.38
+    Round  99/100: acc=0.1536, loss=3.5743, part=0.38
+  Seed 456:
+[TMC Safe Mode] Split Report:
+  Public (Server):  2000 samples (from Train)
+  Private (Users):  48000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+    Round   0/100: acc=0.0106, loss=4.6077, part=0.38
+    Round  10/100: acc=0.0560, loss=4.2030, part=0.38
+    Round  20/100: acc=0.0789, loss=4.0060, part=0.38
+    Round  30/100: acc=0.1131, loss=3.8163, part=0.38
+    Round  40/100: acc=0.1236, loss=3.7309, part=0.38
+    Round  50/100: acc=0.1418, loss=3.6771, part=0.38
+    Round  60/100: acc=0.1402, loss=3.6670, part=0.38
+    Round  70/100: acc=0.1373, loss=3.6427, part=0.38
+    Round  80/100: acc=0.1478, loss=3.6015, part=0.38
+    Round  90/100: acc=0.1545, loss=3.5985, part=0.38
+    Round  99/100: acc=0.1510, loss=3.5932, part=0.38
+
+--- Gamma = 5 ---
+  Seed 42:
+[TMC Safe Mode] Split Report:
+  Public (Server):  2000 samples (from Train)
+  Private (Users):  48000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+    Round   0/100: acc=0.0054, loss=4.6115, part=0.70
+    Round  10/100: acc=0.0672, loss=4.1542, part=0.70
+    Round  20/100: acc=0.0879, loss=3.9282, part=0.70
+    Round  30/100: acc=0.1028, loss=3.7697, part=0.70
+    Round  40/100: acc=0.1180, loss=3.6854, part=0.70
+    Round  50/100: acc=0.1312, loss=3.6475, part=0.70
+    Round  60/100: acc=0.1421, loss=3.5876, part=0.70
+    Round  70/100: acc=0.1491, loss=3.5604, part=0.70
+    Round  80/100: acc=0.1548, loss=3.5428, part=0.70
+    Round  90/100: acc=0.1612, loss=3.5433, part=0.70
+    Round  99/100: acc=0.1633, loss=3.5121, part=0.70
+  Seed 123:
+[TMC Safe Mode] Split Report:
+  Public (Server):  2000 samples (from Train)
+  Private (Users):  48000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+    Round   0/100: acc=0.0099, loss=4.6119, part=0.66
+    Round  10/100: acc=0.0753, loss=4.1244, part=0.66
+    Round  20/100: acc=0.1132, loss=3.8698, part=0.66
+    Round  30/100: acc=0.1321, loss=3.7385, part=0.66
+    Round  40/100: acc=0.1548, loss=3.6373, part=0.66
+    Round  50/100: acc=0.1570, loss=3.5802, part=0.66
+    Round  60/100: acc=0.1627, loss=3.5522, part=0.66
+    Round  70/100: acc=0.1708, loss=3.5204, part=0.66
+    Round  80/100: acc=0.1786, loss=3.4963, part=0.66
+    Round  90/100: acc=0.1781, loss=3.4837, part=0.66
+    Round  99/100: acc=0.1835, loss=3.4611, part=0.66
+  Seed 456:
+[TMC Safe Mode] Split Report:
+  Public (Server):  2000 samples (from Train)
+  Private (Users):  48000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+    Round   0/100: acc=0.0116, loss=4.6333, part=0.66
+    Round  10/100: acc=0.0652, loss=4.1547, part=0.66
+    Round  20/100: acc=0.1044, loss=3.9021, part=0.66
+    Round  30/100: acc=0.1225, loss=3.7685, part=0.66
+    Round  40/100: acc=0.1338, loss=3.6824, part=0.66
+    Round  50/100: acc=0.1449, loss=3.6247, part=0.66
+    Round  60/100: acc=0.1450, loss=3.5924, part=0.66
+    Round  70/100: acc=0.1583, loss=3.5567, part=0.66
+    Round  80/100: acc=0.1547, loss=3.5473, part=0.66
+    Round  90/100: acc=0.1597, loss=3.5180, part=0.66
+    Round  99/100: acc=0.1664, loss=3.5160, part=0.66
+
+--- Gamma = 7 ---
+  Seed 42:
+[TMC Safe Mode] Split Report:
+  Public (Server):  2000 samples (from Train)
+  Private (Users):  48000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+    Round   0/100: acc=0.0100, loss=4.6081, part=0.86
+    Round  10/100: acc=0.0751, loss=4.1363, part=0.86
+    Round  20/100: acc=0.0938, loss=3.9074, part=0.86
+    Round  30/100: acc=0.1144, loss=3.7565, part=0.86
+    Round  40/100: acc=0.1349, loss=3.6598, part=0.86
+    Round  50/100: acc=0.1413, loss=3.6289, part=0.86
+    Round  60/100: acc=0.1518, loss=3.5562, part=0.86
+    Round  70/100: acc=0.1623, loss=3.5458, part=0.86
+    Round  80/100: acc=0.1664, loss=3.5261, part=0.86
+    Round  90/100: acc=0.1679, loss=3.5144, part=0.86
+    Round  99/100: acc=0.1671, loss=3.4941, part=0.86
+  Seed 123:
+[TMC Safe Mode] Split Report:
+  Public (Server):  2000 samples (from Train)
+  Private (Users):  48000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+    Round   0/100: acc=0.0099, loss=4.6129, part=0.74
+    Round  10/100: acc=0.0822, loss=4.1073, part=0.74
+    Round  20/100: acc=0.1038, loss=3.8961, part=0.74
+    Round  30/100: acc=0.1306, loss=3.7190, part=0.74
+    Round  40/100: acc=0.1465, loss=3.6301, part=0.74
+    Round  50/100: acc=0.1453, loss=3.6464, part=0.74
+    Round  60/100: acc=0.1569, loss=3.5676, part=0.74
+    Round  70/100: acc=0.1619, loss=3.5010, part=0.74
+    Round  80/100: acc=0.1691, loss=3.4962, part=0.74
+    Round  90/100: acc=0.1775, loss=3.4867, part=0.74
+    Round  99/100: acc=0.1781, loss=3.4588, part=0.74
+  Seed 456:
+[TMC Safe Mode] Split Report:
+  Public (Server):  2000 samples (from Train)
+  Private (Users):  48000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+    Round   0/100: acc=0.0100, loss=4.6159, part=0.86
+    Round  10/100: acc=0.0719, loss=4.1639, part=0.86
+    Round  20/100: acc=0.1099, loss=3.9014, part=0.86
+    Round  30/100: acc=0.1345, loss=3.7468, part=0.86
+    Round  40/100: acc=0.1434, loss=3.6732, part=0.86
+    Round  50/100: acc=0.1572, loss=3.5971, part=0.86
+    Round  60/100: acc=0.1533, loss=3.6026, part=0.86
+    Round  70/100: acc=0.1691, loss=3.5438, part=0.86
+    Round  80/100: acc=0.1728, loss=3.5149, part=0.86
+    Round  90/100: acc=0.1770, loss=3.5035, part=0.86
+    Round  99/100: acc=0.1719, loss=3.5011, part=0.86
+
+--- Gamma = 10 ---
+  Seed 42:
+[TMC Safe Mode] Split Report:
+  Public (Server):  2000 samples (from Train)
+  Private (Users):  48000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+    Round   0/100: acc=0.0087, loss=4.6111, part=1.00
+    Round  10/100: acc=0.0753, loss=4.1226, part=1.00
+    Round  20/100: acc=0.1025, loss=3.8925, part=1.00
+    Round  30/100: acc=0.1110, loss=3.7963, part=1.00
+    Round  40/100: acc=0.1338, loss=3.6693, part=1.00
+    Round  50/100: acc=0.1502, loss=3.5982, part=1.00
+    Round  60/100: acc=0.1537, loss=3.5835, part=1.00
+    Round  70/100: acc=0.1614, loss=3.5204, part=1.00
+    Round  80/100: acc=0.1625, loss=3.5148, part=1.00
+    Round  90/100: acc=0.1740, loss=3.4940, part=1.00
+    Round  99/100: acc=0.1730, loss=3.4871, part=1.00
+  Seed 123:
+[TMC Safe Mode] Split Report:
+  Public (Server):  2000 samples (from Train)
+  Private (Users):  48000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+Terminated
+Device: cuda
+======================================================================
+
+[Test 1] Centralized ResNet-18 on CIFAR-100 (10 epochs, no FL)
+--------------------------------------------------
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  Epoch 1/10: acc=0.1060
+  Epoch 2/10: acc=0.1795
+Traceback (most recent call last):
+  File "/home/aelab-3/TMC_2026/paid-fd/scripts/diagnose_bottleneck.py", line 496, in <module>
+    diagnose()
+  File "/home/aelab-3/TMC_2026/paid-fd/scripts/diagnose_bottleneck.py", line 67, in diagnose
+    correct += (pred == target).sum().item()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt
+Device: cuda
+======================================================================
+
+[Test 1] Centralized ResNet-18 on CIFAR-100 (10 epochs, no FL)
+--------------------------------------------------
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  Epoch 1/10: acc=0.0912
+  Epoch 2/10: acc=0.1634
+  Epoch 3/10: acc=0.2053
+  Epoch 4/10: acc=0.2810
+  Epoch 5/10: acc=0.2958
+  Epoch 6/10: acc=0.3725
+  Epoch 7/10: acc=0.4301
+  Epoch 8/10: acc=0.4929
+  Epoch 9/10: acc=0.5351
+  Epoch 10/10: acc=0.5522
+  >> Centralized baseline: 0.5522
+
+[Pre-training] Pre-train base model on public data (50 epochs, 20k samples)
+--------------------------------------------------
+  Epoch 1/50: acc=0.0853
+  Epoch 10/50: acc=0.3509
+  Epoch 20/50: acc=0.4958
+  Epoch 30/50: acc=0.5947
+  Epoch 40/50: acc=0.6263
+  Epoch 50/50: acc=0.6322
+  >> Pre-trained baseline (20k public, 50 epochs): 0.6322
+
+[Test 2] Single device fine-tuning (960 samples, non-IID, 50 epochs, FROM pre-trained)
+--------------------------------------------------
+  Device 0: 598 samples
+  Epoch 10/50: test_acc=0.4985
+  Epoch 20/50: test_acc=0.5003
+  Epoch 30/50: test_acc=0.4992
+  Epoch 40/50: test_acc=0.5013
+  Epoch 50/50: test_acc=0.5018
+
+[Test 3] Logit quality analysis (pre-trained + fine-tuned model)
+--------------------------------------------------
+  Logit shape: torch.Size([20000, 100])
+  Logit range: [-11.58, 33.11]
+  Logit mean: 0.0090, std: 3.2667
+  After clip to [-5.0,5.0]:
+    range: [-5.00, 5.00]
+    mean: -0.1645, std: 2.6846
+  Logit prediction accuracy on public data: 0.8242
+
+[Test 4] Distillation from perfect teacher (no noise, no FL)
+--------------------------------------------------
+  Teacher probs entropy: 3.1165
+  Distill epoch 10/50: test_acc=0.5086, loss=0.9179
+  Distill epoch 20/50: test_acc=0.5197, loss=0.6762
+  Distill epoch 30/50: test_acc=0.5266, loss=0.5656
+  Distill epoch 40/50: test_acc=0.5348, loss=0.5239
+  Distill epoch 50/50: test_acc=0.5236, loss=0.4520
+
+[Test 5] Noisy distillation + EMA logit buffer (100 rounds)
+--------------------------------------------------
+  N=35, avg_eps=0.5, noise_scale=0.5714
+  T=3.0, ema_beta=0.7, distill_lr=0.001
+  Signal std: 2.5083
+  Round 20/100: test_acc=0.2839, buffer_err=0.2602
+  Round 40/100: test_acc=0.2494, buffer_err=0.2604
+  Round 60/100: test_acc=0.2661, buffer_err=0.2603
+  Round 80/100: test_acc=0.2632, buffer_err=0.2605
+  Round 100/100: test_acc=0.2596, buffer_err=0.2603
+
+[Test 6] Full FL simulation: 10 devices, 30 rounds, no noise
+--------------------------------------------------
+  Round 5/30: server_acc=0.6183
+  Round 10/30: server_acc=0.6359
+  Round 15/30: server_acc=0.6334
+  Round 20/30: server_acc=0.6435
+  Round 25/30: server_acc=0.6445
+  Round 30/30: server_acc=0.6488
+
+======================================================================
+DIAGNOSIS SUMMARY
+======================================================================
+  Pre-train - Public data only (20k, 50 epochs):   0.6322
+  Test 1 - Centralized (48k samples, 10 epochs):    0.5522
+  Test 2 - Single device fine-tuned (from pretrain): 0.5018
+  Test 4 - Distill from 1 teacher (no noise, T=3):  0.5236
+  Test 5 - Noisy distill + EMA (100 rnd, β=0.7):  0.2596
+  Test 6 - Full FL (10 dev, 30 rnd, pretrain, T=3): 0.6488
+
+Bottleneck analysis:
+  ⚠️  Fine-tuning hurts — catastrophic forgetting on non-IID
+  ⚠️  Distillation fails — teacher too weak or pipeline issue
+  ⚠️  Noise destroys signal — DP noise too strong
+  🟡  FL marginally improves over pre-training
+Device: cuda
+======================================================================
+
+[Test 1] Centralized ResNet-18 on CIFAR-100 (10 epochs, no FL)
+--------------------------------------------------
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  Epoch 1/10: acc=0.0929
+  Epoch 2/10: acc=0.1679
+  Epoch 3/10: acc=0.2440
+  Epoch 4/10: acc=0.2960
+  Epoch 5/10: acc=0.3379
+  Epoch 6/10: acc=0.4151
+  Epoch 7/10: acc=0.4432
+  Epoch 8/10: acc=0.5028
+  Epoch 9/10: acc=0.5330
+  Epoch 10/10: acc=0.5599
+  >> Centralized baseline: 0.5599
+
+[Pre-training] Pre-train base model on public data (50 epochs, 20k samples)
+--------------------------------------------------
+  Epoch 1/50: acc=0.1047
+  Epoch 10/50: acc=0.3885
+  Epoch 20/50: acc=0.5319
+  Epoch 30/50: acc=0.5793
+  Epoch 40/50: acc=0.6250
+  Epoch 50/50: acc=0.6296
+  >> Pre-trained baseline (20k public, 50 epochs): 0.6296
+
+[Test 2] Single device fine-tuning (960 samples, non-IID, 50 epochs, FROM pre-trained)
+--------------------------------------------------
+  Device 0: 598 samples
+  Epoch 10/50: test_acc=0.4939
+  Epoch 20/50: test_acc=0.4982
+  Epoch 30/50: test_acc=0.4968
+  Epoch 40/50: test_acc=0.5014
+  Epoch 50/50: test_acc=0.4998
+
+[Test 3] Logit quality analysis (pre-trained + fine-tuned model)
+--------------------------------------------------
+  Logit shape: torch.Size([20000, 100])
+  Logit range: [-11.60, 31.42]
+  Logit mean: 0.0085, std: 3.2296
+  After clip to [-5.0,5.0]:
+    range: [-5.00, 5.00]
+    mean: -0.1599, std: 2.6588
+  Logit prediction accuracy on public data: 0.8087
+
+[Test 4] Distillation from perfect teacher (no noise, no FL)
+--------------------------------------------------
+  Teacher probs entropy: 3.1581
+  Distill epoch 10/50: test_acc=0.5081, loss=0.9414
+  Distill epoch 20/50: test_acc=0.5094, loss=0.6579
+  Distill epoch 30/50: test_acc=0.5089, loss=0.5678
+  Distill epoch 40/50: test_acc=0.5101, loss=0.4884
+  Distill epoch 50/50: test_acc=0.5220, loss=0.4293
+
+[Test 5] Noisy distillation + EMA logit buffer (100 rounds)
+--------------------------------------------------
+  N=35, avg_eps=0.5, noise_scale=0.5714
+  Signal std: 2.4864
+  Teacher prob stats (T=1): max=0.1283, entropy=3.01
+  Teacher prob stats (T=3): max=0.0389, entropy=4.26
+  Using: T=1.0, ema_beta=0.7, distill_lr=0.001
+  Round 20/100: test_acc=0.2878, buffer_err=0.2602
+  Round 40/100: test_acc=0.2748, buffer_err=0.2604
+  Round 60/100: test_acc=0.2921, buffer_err=0.2603
+  Round 80/100: test_acc=0.2907, buffer_err=0.2605
+  Round 100/100: test_acc=0.2942, buffer_err=0.2603
+
+[Test 6] Full FL simulation: 10 devices, 30 rounds, no noise
+--------------------------------------------------
+  Round 5/30: server_acc=0.6103
+  Round 10/30: server_acc=0.6301
+  Round 15/30: server_acc=0.6432
+  Round 20/30: server_acc=0.6392
+  Round 25/30: server_acc=0.6381
+  Round 30/30: server_acc=0.6433
+
+======================================================================
+DIAGNOSIS SUMMARY
+======================================================================
+  Pre-train - Public data only (20k, 50 epochs):   0.6296
+  Test 1 - Centralized (48k samples, 10 epochs):    0.5599
+  Test 2 - Single device fine-tuned (from pretrain): 0.4998
+  Test 4 - Distill from 1 teacher (no noise, T=3):  0.5220
+  Test 5 - Noisy distill + EMA (100 rnd, β=0.7):  0.2942
+  Test 6 - Full FL (10 dev, 30 rnd, pretrain, T=3): 0.6433
+
+Bottleneck analysis:
+  ⚠️  Fine-tuning hurts — catastrophic forgetting on non-IID
+  ⚠️  Distillation fails — teacher too weak or pipeline issue
+  🟡  FL marginally improves over pre-training
+Device: cuda
+======================================================================
+
+[Test 1] Centralized ResNet-18 on CIFAR-100 (10 epochs, no FL)
+--------------------------------------------------
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  Epoch 1/10: acc=0.1164
+  Epoch 2/10: acc=0.1899
+  Epoch 3/10: acc=0.2237
+  Epoch 4/10: acc=0.3071
+  Epoch 5/10: acc=0.3626
+  Epoch 6/10: acc=0.4138
+  Epoch 7/10: acc=0.4737
+  Epoch 8/10: acc=0.5253
+  Epoch 9/10: acc=0.5636
+  Epoch 10/10: acc=0.5815
+  >> Centralized baseline: 0.5815
+
+[Pre-training] Pre-train base model on public data (50 epochs, 20k samples)
+--------------------------------------------------
+  Epoch 1/50: acc=0.0822
+  Epoch 10/50: acc=0.3688
+  Epoch 20/50: acc=0.5036
+  Epoch 30/50: acc=0.5830
+  Epoch 40/50: acc=0.6150
+  Epoch 50/50: acc=0.6223
+  >> Pre-trained baseline (20k public, 50 epochs): 0.6223
+
+[Test 2] Single device fine-tuning (960 samples, non-IID, 50 epochs, FROM pre-trained)
+--------------------------------------------------
+  Device 0: 598 samples
+  Epoch 10/50: test_acc=0.4992
+  Epoch 20/50: test_acc=0.4998
+  Epoch 30/50: test_acc=0.5000
+  Epoch 40/50: test_acc=0.5001
+  Epoch 50/50: test_acc=0.4998
+
+[Test 3] Logit quality analysis (pre-trained + fine-tuned model)
+--------------------------------------------------
+  Logit shape: torch.Size([20000, 100])
+  Logit range: [-11.80, 33.21]
+  Logit mean: 0.0066, std: 3.3229
+  After clip to [-5.0,5.0]:
+    range: [-5.00, 5.00]
+    mean: -0.1677, std: 2.7237
+  Logit prediction accuracy on public data: 0.8101
+
+[Test 4] Distillation from perfect teacher (no noise, no FL)
+--------------------------------------------------
+  Teacher probs entropy: 3.1257
+  Distill epoch 10/50: test_acc=0.5028, loss=0.9973
+  Distill epoch 20/50: test_acc=0.5107, loss=0.6655
+  Distill epoch 30/50: test_acc=0.5245, loss=0.5511
+  Distill epoch 40/50: test_acc=0.5267, loss=0.4943
+  Distill epoch 50/50: test_acc=0.5313, loss=0.4473
+
+[Test 5] Noisy distillation + EMA + hard-label CE (100 rounds)
+--------------------------------------------------
+  N=35, avg_eps=0.5, noise_scale=0.5714
+  Signal std: 2.5434
+  Soft-label max_prob (T=1): 0.1227  (near-uniform for KL-div!)
+  Hard-label argmax accuracy: 0.6732  (good for CE loss)
+  Using: ema_beta=0.7, distill_lr=0.001, CE loss
+  Round 20/100: test_acc=0.3494, buf_err=0.2602, argmax_match=0.3379
+  Round 40/100: test_acc=0.3508, buf_err=0.2604, argmax_match=0.3362
+  Round 60/100: test_acc=0.3578, buf_err=0.2603, argmax_match=0.3392
+  Round 80/100: test_acc=0.3501, buf_err=0.2605, argmax_match=0.3381
+  Round 100/100: test_acc=0.3527, buf_err=0.2603, argmax_match=0.3415
+
+[Test 6] Full FL simulation: 10 devices, 30 rounds, no noise
+--------------------------------------------------
+  Round 5/30: server_acc=0.6167
+  Round 10/30: server_acc=0.6301
+  Round 15/30: server_acc=0.6299
+  Round 20/30: server_acc=0.6377
+  Round 25/30: server_acc=0.6412
+  Round 30/30: server_acc=0.6434
+
+======================================================================
+DIAGNOSIS SUMMARY
+======================================================================
+  Pre-train - Public data only (20k, 50 epochs):   0.6223
+  Test 1 - Centralized (48k samples, 10 epochs):    0.5815
+  Test 2 - Single device fine-tuned (from pretrain): 0.4998
+  Test 4 - Distill from 1 teacher (no noise, T=3):  0.5313
+  Test 5 - Noisy distill + EMA + hard CE (100 rnd):  0.3527
+  Test 6 - Full FL (10 dev, 30 rnd, pretrain, T=3): 0.6434
+
+Bottleneck analysis:
+  ⚠️  Fine-tuning hurts — catastrophic forgetting on non-IID
+  ⚠️  Distillation fails — teacher too weak or pipeline issue
+  🟡  FL marginally improves over pre-training
+Device: cuda
+======================================================================
+
+[Test 1] Centralized ResNet-18 on CIFAR-100 (10 epochs, no FL)
+--------------------------------------------------
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  Epoch 1/10: acc=0.0925
+  Epoch 2/10: acc=0.1889
+  Epoch 3/10: acc=0.2342
+  Epoch 4/10: acc=0.3242
+  Epoch 5/10: acc=0.3671
+  Epoch 6/10: acc=0.4232
+  Epoch 7/10: acc=0.4679
+  Epoch 8/10: acc=0.5216
+  Epoch 9/10: acc=0.5548
+  Epoch 10/10: acc=0.5772
+  >> Centralized baseline: 0.5772
+
+[Pre-training] Pre-train base model on public data (50 epochs, 20k samples)
+--------------------------------------------------
+  Epoch 1/50: acc=0.0788
+  Epoch 10/50: acc=0.4062
+  Epoch 20/50: acc=0.5216
+  Epoch 30/50: acc=0.5868
+  Epoch 40/50: acc=0.6234
+  Epoch 50/50: acc=0.6267
+  >> Pre-trained baseline (20k public, 50 epochs): 0.6267
+
+[Test 2] Single device fine-tuning (960 samples, non-IID, 50 epochs, FROM pre-trained)
+--------------------------------------------------
+  Device 0: 598 samples
+  Epoch 10/50: test_acc=0.5041
+  Epoch 20/50: test_acc=0.5017
+  Epoch 30/50: test_acc=0.5034
+  Epoch 40/50: test_acc=0.5034
+  Epoch 50/50: test_acc=0.5037
+
+[Test 3] Logit quality analysis (pre-trained + fine-tuned model)
+--------------------------------------------------
+  Logit shape: torch.Size([20000, 100])
+  Logit range: [-12.42, 36.56]
+  Logit mean: -0.0115, std: 3.2263
+  After clip to [-5.0,5.0]:
+    range: [-5.00, 5.00]
+    mean: -0.1784, std: 2.6601
+  Logit prediction accuracy on public data: 0.8255
+
+[Test 4] Distillation from perfect teacher (no noise, no FL)
+--------------------------------------------------
+  Teacher probs entropy: 3.1429
+  Distill epoch 10/50: test_acc=0.5068, loss=0.8976
+  Distill epoch 20/50: test_acc=0.5204, loss=0.6689
+  Distill epoch 30/50: test_acc=0.5290, loss=0.5613
+  Distill epoch 40/50: test_acc=0.5285, loss=0.4820
+  Distill epoch 50/50: test_acc=0.5310, loss=0.4493
+
+[Test 5] Noisy distillation + EMA + mixed loss (100 rounds)
+--------------------------------------------------
+  N=35, avg_eps=0.5, noise_scale=0.5714
+  Signal std: 2.4869
+  Agg argmax accuracy (vs teacher): 0.6994
+  Using: α=0.3, ema_beta=0.7, lr=0.001
+  Loss = 0.3*CE(pseudo) + 0.7*CE(true_label)
+  Round 20/100: test_acc=0.5658, buf_err=0.2602, pseudo_acc=0.3476
+  Round 40/100: test_acc=0.5783, buf_err=0.2604, pseudo_acc=0.3462
+  Round 60/100: test_acc=0.5751, buf_err=0.2603, pseudo_acc=0.3465
+  Round 80/100: test_acc=0.5741, buf_err=0.2605, pseudo_acc=0.3458
+  Round 100/100: test_acc=0.5894, buf_err=0.2603, pseudo_acc=0.3497
+
+[Test 6] Full FL simulation: 10 devices, 30 rounds, no noise
+--------------------------------------------------
+  Round 5/30: server_acc=0.6253
+  Round 10/30: server_acc=0.6321
+  Round 15/30: server_acc=0.6344
+  Round 20/30: server_acc=0.6366
+  Round 25/30: server_acc=0.6456
+  Round 30/30: server_acc=0.6423
+
+======================================================================
+DIAGNOSIS SUMMARY
+======================================================================
+  Pre-train - Public data only (20k, 50 epochs):   0.6267
+  Test 1 - Centralized (48k samples, 10 epochs):    0.5772
+  Test 2 - Single device fine-tuned (from pretrain): 0.5037
+  Test 4 - Distill from 1 teacher (no noise, T=3):  0.5310
+  Test 5 - Noisy distill + mixed loss (α=0.3):   0.5894
+  Test 6 - Full FL (10 dev, 30 rnd, pretrain, T=3): 0.6423
+
+Bottleneck analysis:
+  ⚠️  Fine-tuning hurts — catastrophic forgetting on non-IID
+  ⚠️  Distillation fails — teacher too weak or pipeline issue
+  🟡  FL marginally improves over pre-training
+🖥️  Device: cuda
+🎲 Seeds: [42]
+🔄 Rounds: 100
+
+======================================================================
+Phase 1.1: Gamma Sensitivity Analysis
+======================================================================
+
+--- Gamma = 3 ---
+  Seed 42:
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 50 epochs on public data ...
+    Epoch 1/50: loss=4.2485
+    Epoch 10/50: loss=1.9602
+    Epoch 20/50: loss=0.9450
+    Epoch 30/50: loss=0.2836
+    Epoch 40/50: loss=0.0275
+    Epoch 50/50: loss=0.0148
+  [Pre-training] Done. All local models will start from this checkpoint.
+    Round   0/100: acc=0.5190, loss=1.8214, part=0.38
+    Round  10/100: acc=0.5667, loss=1.6499, part=0.38
+    Round  20/100: acc=0.5743, loss=1.6275, part=0.38
+    Round  30/100: acc=0.5804, loss=1.6031, part=0.38
+    Round  40/100: acc=0.5921, loss=1.5529, part=0.38
+    Round  50/100: acc=0.5961, loss=1.5343, part=0.38
+    Round  60/100: acc=0.6071, loss=1.4902, part=0.38
+    Round  70/100: acc=0.6038, loss=1.5164, part=0.38
+    Round  80/100: acc=0.6018, loss=1.5215, part=0.38
+    Round  90/100: acc=0.6024, loss=1.5268, part=0.38
+    Round  99/100: acc=0.6009, loss=1.5255, part=0.38
+
+--- Gamma = 5 ---
+  Seed 42:
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 50 epochs on public data ...
+    Epoch 1/50: loss=4.2485
+    Epoch 10/50: loss=1.9602
+    Epoch 20/50: loss=0.9450
+    Epoch 30/50: loss=0.2836
+    Epoch 40/50: loss=0.0275
+    Epoch 50/50: loss=0.0148
+  [Pre-training] Done. All local models will start from this checkpoint.
+    Round   0/100: acc=0.5245, loss=1.8109, part=0.70
+    Round  10/100: acc=0.5530, loss=1.7050, part=0.70
+    Round  20/100: acc=0.5841, loss=1.5945, part=0.70
+    Round  30/100: acc=0.5922, loss=1.5601, part=0.70
+    Round  40/100: acc=0.5961, loss=1.5511, part=0.70
+    Round  50/100: acc=0.6027, loss=1.5323, part=0.70
+    Round  60/100: acc=0.5995, loss=1.5343, part=0.70
+    Round  70/100: acc=0.5974, loss=1.5418, part=0.70
+    Round  80/100: acc=0.6034, loss=1.5337, part=0.70
+    Round  90/100: acc=0.6025, loss=1.5155, part=0.70
+    Round  99/100: acc=0.6100, loss=1.5344, part=0.70
+
+--- Gamma = 7 ---
+  Seed 42:
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 50 epochs on public data ...
+    Epoch 1/50: loss=4.2485
+    Epoch 10/50: loss=1.9602
+    Epoch 20/50: loss=0.9450
+    Epoch 30/50: loss=0.2836
+    Epoch 40/50: loss=0.0275
+    Epoch 50/50: loss=0.0148
+  [Pre-training] Done. All local models will start from this checkpoint.
+    Round   0/100: acc=0.5101, loss=1.8479, part=0.86
+    Round  10/100: acc=0.5640, loss=1.6768, part=0.86
+    Round  20/100: acc=0.5757, loss=1.6106, part=0.86
+    Round  30/100: acc=0.5834, loss=1.5725, part=0.86
+    Round  40/100: acc=0.5970, loss=1.5464, part=0.86
+    Round  50/100: acc=0.5938, loss=1.5803, part=0.86
+    Round  60/100: acc=0.5966, loss=1.5642, part=0.86
+    Round  70/100: acc=0.6019, loss=1.5377, part=0.86
+    Round  80/100: acc=0.6051, loss=1.5460, part=0.86
+    Round  90/100: acc=0.5995, loss=1.5529, part=0.86
+    Round  99/100: acc=0.6037, loss=1.5245, part=0.86
+
+--- Gamma = 10 ---
+  Seed 42:
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 50 epochs on public data ...
+    Epoch 1/50: loss=4.2485
+    Epoch 10/50: loss=1.9602
+    Epoch 20/50: loss=0.9450
+    Epoch 30/50: loss=0.2836
+    Epoch 40/50: loss=0.0275
+    Epoch 50/50: loss=0.0148
+  [Pre-training] Done. All local models will start from this checkpoint.
+    Round   0/100: acc=0.5273, loss=1.7901, part=1.00
+    Round  10/100: acc=0.5638, loss=1.6828, part=1.00
+    Round  20/100: acc=0.5864, loss=1.5911, part=1.00
+    Round  30/100: acc=0.5843, loss=1.5664, part=1.00
+    Round  40/100: acc=0.5793, loss=1.5992, part=1.00
+    Round  50/100: acc=0.5978, loss=1.5603, part=1.00
+    Round  60/100: acc=0.6013, loss=1.5208, part=1.00
+    Round  70/100: acc=0.6032, loss=1.5127, part=1.00
+    Round  80/100: acc=0.6086, loss=1.5150, part=1.00
+    Round  90/100: acc=0.6078, loss=1.5180, part=1.00
+    Round  99/100: acc=0.6024, loss=1.5239, part=1.00
+
+--- Gamma = 15 ---
+  Seed 42:
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 50 epochs on public data ...
+    Epoch 1/50: loss=4.2485
+    Epoch 10/50: loss=1.9602
+    Epoch 20/50: loss=0.9450
+    Epoch 30/50: loss=0.2836
+    Epoch 40/50: loss=0.0275
+    Epoch 50/50: loss=0.0148
+  [Pre-training] Done. All local models will start from this checkpoint.
+    Round   0/100: acc=0.5180, loss=1.8347, part=1.00
+    Round  10/100: acc=0.5653, loss=1.6529, part=1.00
+    Round  20/100: acc=0.5894, loss=1.5747, part=1.00
+    Round  30/100: acc=0.5859, loss=1.5555, part=1.00
+    Round  40/100: acc=0.5735, loss=1.6376, part=1.00
+    Round  50/100: acc=0.5965, loss=1.5541, part=1.00
+    Round  60/100: acc=0.6025, loss=1.5330, part=1.00
+    Round  70/100: acc=0.6056, loss=1.4983, part=1.00
+    Round  80/100: acc=0.6038, loss=1.5201, part=1.00
+    Round  90/100: acc=0.6015, loss=1.5252, part=1.00
+    Round  99/100: acc=0.5989, loss=1.5378, part=1.00
+
+--- Gamma = 20 ---
+  Seed 42:
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 50 epochs on public data ...
+    Epoch 1/50: loss=4.2485
+    Epoch 10/50: loss=1.9602
+    Epoch 20/50: loss=0.9450
+    Epoch 30/50: loss=0.2836
+    Epoch 40/50: loss=0.0275
+    Epoch 50/50: loss=0.0148
+  [Pre-training] Done. All local models will start from this checkpoint.
