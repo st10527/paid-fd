@@ -42,7 +42,7 @@ class FixedEpsilonConfig:
     # Distillation
     distill_epochs: int = 1
     distill_lr: float = 0.001    # Standard Adam lr (safe because EMA denoises labels)
-    temperature: float = 3.0     # Soft labels (safe after EMA denoising)
+    temperature: float = 1.0     # T=1: clipped logits [-5,5] / T=3 → near-uniform for 100 classes
     
     # EMA logit buffer
     ema_beta: float = 0.7        # Smoothing factor

@@ -292,10 +292,10 @@ def diagnose():
     # Simulate the REAL FL scenario with EMA logit buffer:
     # - 100 rounds, each round: fresh Laplace noise on aggregated logits
     # - EMA buffer accumulates logits across rounds (noise cancels, signal stays)
-    # - Distill from smoothed buffer, NOT raw noisy logits
+    # - Distill from smoothed buffer with T=1 (peaked softmax for 100 classes)
     N_participants = 35
     avg_eps = 0.5
-    T_noisy = 3.0           # Safe to use T=3 because EMA denoises
+    T_noisy = 1.0           # T=1: clipped logits [-5,5] need peaked softmax for 100 classes
     ema_beta = 0.7           # EMA smoothing factor
     distill_lr_noisy = 0.001 # Standard lr (safe because EMA gives clean targets)
     
@@ -312,9 +312,16 @@ def diagnose():
     sensitivity = 2.0 * C / N_participants
     noise_scale = sensitivity / avg_eps
     
+    # Show the probability distribution at different temperatures for diagnosis
+    clean_probs_t1 = F.softmax(agg_logits / 1.0, dim=1)
+    clean_probs_t3 = F.softmax(agg_logits / 3.0, dim=1)
     print(f"  N={N_participants}, avg_eps={avg_eps}, noise_scale={noise_scale:.4f}")
-    print(f"  T={T_noisy}, ema_beta={ema_beta}, distill_lr={distill_lr_noisy}")
     print(f"  Signal std: {agg_logits.std():.4f}")
+    print(f"  Teacher prob stats (T=1): max={clean_probs_t1.max(dim=1)[0].mean():.4f}, "
+          f"entropy={-(clean_probs_t1 * clean_probs_t1.log().clamp(min=-100)).sum(dim=1).mean():.2f}")
+    print(f"  Teacher prob stats (T=3): max={clean_probs_t3.max(dim=1)[0].mean():.4f}, "
+          f"entropy={-(clean_probs_t3 * clean_probs_t3.log().clamp(min=-100)).sum(dim=1).mean():.2f}")
+    print(f"  Using: T={T_noisy}, ema_beta={ema_beta}, distill_lr={distill_lr_noisy}")
     
     student2 = copy.deepcopy(pretrain_model)
     student2_opt = torch.optim.Adam(student2.parameters(), lr=distill_lr_noisy)

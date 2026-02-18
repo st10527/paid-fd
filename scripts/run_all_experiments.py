@@ -372,7 +372,7 @@ def _create_method(method_name: str, model, config: dict, device: str):
             local_momentum=tc.get('local_momentum', 0.9),
             distill_epochs=1,       # 1 epoch/round (EMA denoises labels)
             distill_lr=0.001,       # Standard lr (safe: EMA logit buffer removes noise)
-            temperature=3.0,        # Soft labels (safe: EMA gives clean logits)
+            temperature=1.0,        # T=1: clipped [-5,5] logits need peaked softmax
             ema_beta=0.7,           # Logit buffer smoothing
             clip_bound=mc.get('clip_bound', 5.0),
             public_samples=mc.get('public_samples_per_round', 1000),
@@ -387,7 +387,7 @@ def _create_method(method_name: str, model, config: dict, device: str):
             local_lr=local_lr,
             distill_epochs=1,       # 1 epoch/round (EMA denoises labels)
             distill_lr=0.001,       # Standard lr (safe: EMA logit buffer removes noise)
-            temperature=3.0,        # Soft labels (safe: EMA gives clean logits)
+            temperature=1.0,        # T=1: clipped [-5,5] logits need peaked softmax
             ema_beta=0.7,           # Logit buffer smoothing
             clip_bound=5.0,
             participation_rate=mc.get('participation_rate', 1.0),
