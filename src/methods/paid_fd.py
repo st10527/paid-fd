@@ -301,12 +301,16 @@ class PAIDFD(FederatedMethod):
                     + (1 - beta) * noisy_logits_tensor[:buf_len]
                 )
             
-            # 3d. Convert SMOOTHED logits to teacher probabilities
-            T = self.config.temperature
-            teacher_probs = F.softmax(self._logit_buffer / T, dim=1)
+            # 3d. Hard-label distillation (PATE-style)
+            # With clipped logits [-5,5] and 100 classes, soft labels are
+            # near-uniform (max_prob ~13%). KL-div from near-uniform labels
+            # forces the student to also output near-uniform → unlearns.
+            # But the ARGMAX is still mostly correct → use hard pseudo-labels
+            # with CrossEntropyLoss for a strong gradient signal.
+            pseudo_labels = self._logit_buffer.argmax(dim=1)  # (N,)
             
-            # 3e. Distill to server model
-            self._distill_to_server(teacher_probs, public_images[:min_len])
+            # 3e. Distill to server model using hard labels
+            self._distill_to_server_hard(pseudo_labels, public_images[:min_len])
         
         # Evaluate
         accuracy = 0.0
@@ -416,28 +420,29 @@ class PAIDFD(FederatedMethod):
         
         print(f"  [Pre-training] Done. All local models will start from this checkpoint.")
     
-    def _distill_to_server(
+    def _distill_to_server_hard(
         self,
-        teacher_probs: torch.Tensor,
+        pseudo_labels: torch.Tensor,
         public_images: torch.Tensor
     ):
         """
-        Distill aggregated knowledge to server model.
+        Distill using hard pseudo-labels (PATE-style).
+        
+        With clipped logits [-5,5] and 100 classes, soft-label KL-div fails
+        because softmax produces near-uniform distributions (max_prob ~13%).
+        Instead, take argmax of EMA-smoothed logits as pseudo-labels and
+        train with standard CrossEntropyLoss.
+        
+        The argmax is much more robust to noise than soft probabilities:
+        noise must flip the TOP prediction, not just shift probabilities.
         
         Args:
-            teacher_probs: Aggregated soft labels (N, K) - probability vectors
+            pseudo_labels: Hard labels from argmax of smoothed logits (N,)
             public_images: Corresponding public images (N, C, H, W)
-        
-        Uses KL divergence loss with temperature scaling.
-        Receives pre-collected (images, probs) pairs so alignment is guaranteed.
-        Uses all N samples for distillation.
-        
-        Data augmentation (RandomCrop + RandomHorizontalFlip) is applied
-        to public images during distillation to prevent the server model
-        from memorising the fixed set of public images.
         """
         self.server_model.train()
         optimizer = self.distill_optimizer
+        criterion = nn.CrossEntropyLoss()
         
         # Augmentation on normalised tensors (works for CIFAR 32x32)
         augment = transforms.Compose([
@@ -445,11 +450,7 @@ class PAIDFD(FederatedMethod):
             transforms.RandomHorizontalFlip(),
         ])
         
-        T = self.config.temperature
-        n_target = min(len(teacher_probs), len(public_images))
-        
-        # Keep teacher_probs on CPU, move batches to device on-the-fly
-        # to avoid GPU OOM with large public sets
+        n_target = min(len(pseudo_labels), len(public_images))
         batch_size = 256
         
         for epoch in range(self.config.distill_epochs):
@@ -462,17 +463,13 @@ class PAIDFD(FederatedMethod):
                 idx = perm[start:end]
                 
                 data = augment(public_images[idx]).to(self.device)
-                target = teacher_probs[idx].to(self.device)
+                target = pseudo_labels[idx].to(self.device)
                 
                 # Student forward pass
                 student_logits = self.server_model(data)
                 
-                # KL divergence: KL(teacher || student)
-                loss = F.kl_div(
-                    F.log_softmax(student_logits / T, dim=1),
-                    target,
-                    reduction='batchmean'
-                ) * (T * T)
+                # Standard cross-entropy with hard pseudo-labels
+                loss = criterion(student_logits, target)
                 
                 optimizer.zero_grad()
                 loss.backward()

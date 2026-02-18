@@ -224,12 +224,11 @@ class FixedEpsilon(FederatedMethod):
                     + (1 - beta) * noisy_logits_tensor[:buf_len]
                 )
 
-            # Convert SMOOTHED logits to teacher probs
-            T = self.config.temperature
-            teacher_probs = F.softmax(self._logit_buffer / T, dim=1)
+            # Hard-label distillation (PATE-style)
+            pseudo_labels = self._logit_buffer.argmax(dim=1)
 
             # Distill
-            self._distill_to_server(teacher_probs, public_images[:min_len])
+            self._distill_to_server_hard(pseudo_labels, public_images[:min_len])
 
         # Evaluate
         accuracy = 0.0
@@ -286,23 +285,22 @@ class FixedEpsilon(FederatedMethod):
                 print(f"    Epoch {epoch+1}/{self.config.pretrain_epochs}")
         print(f"  [Fixed-eps Pre-training] Done.")
 
-    def _distill_to_server(
+    def _distill_to_server_hard(
         self,
-        teacher_probs: torch.Tensor,
+        pseudo_labels: torch.Tensor,
         public_images: torch.Tensor
     ):
-        """Distill aggregated knowledge to server model (same as PAID-FD)."""
+        """Distill using hard pseudo-labels (PATE-style, same as PAID-FD)."""
         self.server_model.train()
         optimizer = self.distill_optimizer
+        criterion = nn.CrossEntropyLoss()
 
-        # Augmentation prevents server from memorising fixed public images
         augment = transforms.Compose([
             transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
             transforms.RandomHorizontalFlip(),
         ])
 
-        T = self.config.temperature
-        n_target = min(len(teacher_probs), len(public_images))
+        n_target = min(len(pseudo_labels), len(public_images))
         batch_size = 256
 
         for epoch in range(self.config.distill_epochs):
@@ -312,14 +310,10 @@ class FixedEpsilon(FederatedMethod):
                 idx = perm[start:end]
 
                 data = augment(public_images[idx]).to(self.device)
-                target = teacher_probs[idx].to(self.device)
+                target = pseudo_labels[idx].to(self.device)
 
                 student_logits = self.server_model(data)
-                loss = F.kl_div(
-                    F.log_softmax(student_logits / T, dim=1),
-                    target,
-                    reduction='batchmean'
-                ) * (T * T)
+                loss = criterion(student_logits, target)
 
                 optimizer.zero_grad()
                 loss.backward()

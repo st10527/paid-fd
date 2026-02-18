@@ -284,20 +284,24 @@ def diagnose():
     distill_acc = acc
     
     # ================================================================
-    # Test 5: Distillation with noise + EMA logit buffer (simulating PAID-FD)
+    # Test 5: Noisy distillation + EMA + hard labels (PATE-style)
     # ================================================================
-    print("\n[Test 5] Noisy distillation + EMA logit buffer (100 rounds)")
+    print("\n[Test 5] Noisy distillation + EMA + hard-label CE (100 rounds)")
     print("-" * 50)
     
-    # Simulate the REAL FL scenario with EMA logit buffer:
-    # - 100 rounds, each round: fresh Laplace noise on aggregated logits
-    # - EMA buffer accumulates logits across rounds (noise cancels, signal stays)
-    # - Distill from smoothed buffer with T=1 (peaked softmax for 100 classes)
+    # PATE-style pipeline:
+    # 1. EMA logit buffer accumulates noisy logits (noise cancels over rounds)
+    # 2. Take ARGMAX of smoothed buffer → hard pseudo-labels
+    # 3. Train with CrossEntropyLoss (not KL-div from soft labels)
+    #
+    # Why hard labels? With clipped logits [-5,5] and 100 classes,
+    # softmax produces near-uniform distributions (max_prob ~13%).
+    # KL-div from near-uniform → student becomes near-uniform → accuracy crashes.
+    # But argmax is robust: noise must FLIP the top prediction, not just shift probs.
     N_participants = 35
     avg_eps = 0.5
-    T_noisy = 1.0           # T=1: clipped logits [-5,5] need peaked softmax for 100 classes
-    ema_beta = 0.7           # EMA smoothing factor
-    distill_lr_noisy = 0.001 # Standard lr (safe because EMA gives clean targets)
+    ema_beta = 0.7
+    distill_lr_noisy = 0.001
     
     # Simulate multiple devices
     all_device_logits = []
@@ -312,50 +316,45 @@ def diagnose():
     sensitivity = 2.0 * C / N_participants
     noise_scale = sensitivity / avg_eps
     
-    # Show the probability distribution at different temperatures for diagnosis
+    # Analyze aggregated logit quality
     clean_probs_t1 = F.softmax(agg_logits / 1.0, dim=1)
-    clean_probs_t3 = F.softmax(agg_logits / 3.0, dim=1)
+    clean_argmax_acc = (agg_logits.argmax(dim=1) == teacher_logits.argmax(dim=1)).float().mean()
     print(f"  N={N_participants}, avg_eps={avg_eps}, noise_scale={noise_scale:.4f}")
     print(f"  Signal std: {agg_logits.std():.4f}")
-    print(f"  Teacher prob stats (T=1): max={clean_probs_t1.max(dim=1)[0].mean():.4f}, "
-          f"entropy={-(clean_probs_t1 * clean_probs_t1.log().clamp(min=-100)).sum(dim=1).mean():.2f}")
-    print(f"  Teacher prob stats (T=3): max={clean_probs_t3.max(dim=1)[0].mean():.4f}, "
-          f"entropy={-(clean_probs_t3 * clean_probs_t3.log().clamp(min=-100)).sum(dim=1).mean():.2f}")
-    print(f"  Using: T={T_noisy}, ema_beta={ema_beta}, distill_lr={distill_lr_noisy}")
+    print(f"  Soft-label max_prob (T=1): {clean_probs_t1.max(dim=1)[0].mean():.4f}  (near-uniform for KL-div!)")
+    print(f"  Hard-label argmax accuracy: {clean_argmax_acc:.4f}  (good for CE loss)")
+    print(f"  Using: ema_beta={ema_beta}, distill_lr={distill_lr_noisy}, CE loss")
     
     student2 = copy.deepcopy(pretrain_model)
     student2_opt = torch.optim.Adam(student2.parameters(), lr=distill_lr_noisy)
-    logit_buffer = None  # EMA logit buffer
+    ce_criterion = nn.CrossEntropyLoss()
+    logit_buffer = None
     
     for rnd in range(100):
-        # Each round: fresh Laplace noise (different realization)
+        # Each round: fresh Laplace noise
         noise = np.random.laplace(0, noise_scale, agg_logits.shape).astype(np.float32)
         noisy_logits = torch.from_numpy(agg_logits.numpy() + noise).float()
         
-        # EMA logit buffer update (noise cancels across rounds)
+        # EMA logit buffer update
         if logit_buffer is None:
             logit_buffer = noisy_logits.clone()
         else:
             logit_buffer = ema_beta * logit_buffer + (1 - ema_beta) * noisy_logits
         
-        # Convert SMOOTHED logits to teacher probs
-        smoothed_probs = F.softmax(logit_buffer / T_noisy, dim=1)
+        # Hard pseudo-labels from smoothed buffer
+        pseudo_labels = logit_buffer.argmax(dim=1)
         
-        # 1 distill epoch per round
+        # 1 distill epoch per round with CE loss
         student2.train()
         perm = torch.randperm(n_target)
         for start in range(0, n_target, 256):
             end = min(start + 256, n_target)
             idx = perm[start:end]
             data = augment(public_images[idx]).to(device)
-            target = smoothed_probs[idx].to(device)
+            target = pseudo_labels[idx].to(device)
             
             s_logits = student2(data)
-            loss = F.kl_div(
-                F.log_softmax(s_logits / T_noisy, dim=1),
-                target,
-                reduction='batchmean'
-            ) * (T_noisy * T_noisy)
+            loss = ce_criterion(s_logits, target)
             
             student2_opt.zero_grad()
             loss.backward()
@@ -373,9 +372,9 @@ def diagnose():
                     correct += (pred == target).sum().item()
                     total += target.size(0)
             acc = correct / total
-            # Also measure how close buffer is to true logits
             buf_err = (logit_buffer - agg_logits).abs().mean().item()
-            print(f"  Round {rnd+1}/100: test_acc={acc:.4f}, buffer_err={buf_err:.4f}")
+            buf_argmax_acc = (logit_buffer.argmax(dim=1) == agg_logits.argmax(dim=1)).float().mean().item()
+            print(f"  Round {rnd+1}/100: test_acc={acc:.4f}, buf_err={buf_err:.4f}, argmax_match={buf_argmax_acc:.4f}")
     
     noisy_distill_acc = acc
     
@@ -477,7 +476,7 @@ def diagnose():
     print(f"  Test 1 - Centralized (48k samples, 10 epochs):    {centralized_acc:.4f}")
     print(f"  Test 2 - Single device fine-tuned (from pretrain): {single_device_acc:.4f}")
     print(f"  Test 4 - Distill from 1 teacher (no noise, T=3):  {distill_acc:.4f}")
-    print(f"  Test 5 - Noisy distill + EMA (100 rnd, β=0.7):  {noisy_distill_acc:.4f}")
+    print(f"  Test 5 - Noisy distill + EMA + hard CE (100 rnd):  {noisy_distill_acc:.4f}")
     print(f"  Test 6 - Full FL (10 dev, 30 rnd, pretrain, T=3): {fl_acc:.4f}")
     print()
     print("Bottleneck analysis:")
