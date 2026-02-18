@@ -222,15 +222,18 @@ def diagnose():
     # Get teacher soft labels on public data
     teacher_logits_list = []
     public_images_list = []
+    public_labels_list = []
     with torch.no_grad():
-        for data, _ in public_loader:
+        for data, labels in public_loader:
             data = data.to(device)
             logits = teacher_model(data)
             teacher_logits_list.append(logits.cpu())
             public_images_list.append(data.cpu())
+            public_labels_list.append(labels)
     
     teacher_logits = torch.cat(teacher_logits_list, dim=0)
     public_images = torch.cat(public_images_list, dim=0)
+    public_labels = torch.cat(public_labels_list, dim=0)
     teacher_probs = F.softmax(teacher_logits / T, dim=1)
     
     print(f"  Teacher probs entropy: {-(teacher_probs * teacher_probs.log().clamp(min=-100)).sum(dim=1).mean():.4f}")
@@ -284,24 +287,21 @@ def diagnose():
     distill_acc = acc
     
     # ================================================================
-    # Test 5: Noisy distillation + EMA + hard labels (PATE-style)
+    # Test 5: Noisy distillation + EMA + mixed loss (ground-truth reg.)
     # ================================================================
-    print("\n[Test 5] Noisy distillation + EMA + hard-label CE (100 rounds)")
+    print("\n[Test 5] Noisy distillation + EMA + mixed loss (100 rounds)")
     print("-" * 50)
     
-    # PATE-style pipeline:
-    # 1. EMA logit buffer accumulates noisy logits (noise cancels over rounds)
-    # 2. Take ARGMAX of smoothed buffer → hard pseudo-labels
-    # 3. Train with CrossEntropyLoss (not KL-div from soft labels)
-    #
-    # Why hard labels? With clipped logits [-5,5] and 100 classes,
-    # softmax produces near-uniform distributions (max_prob ~13%).
-    # KL-div from near-uniform → student becomes near-uniform → accuracy crashes.
-    # But argmax is robust: noise must FLIP the top prediction, not just shift probs.
+    # Mixed-loss pipeline (prevents forgetting while absorbing FL signal):
+    # 1. EMA logit buffer accumulates noisy logits (noise cancels)
+    # 2. Hard pseudo-labels from argmax of smoothed buffer
+    # 3. loss = α * CE(pseudo_label) + (1-α) * CE(true_label)
+    # Ground-truth keeps model stable; pseudo-labels contribute FL knowledge
     N_participants = 35
     avg_eps = 0.5
     ema_beta = 0.7
     distill_lr_noisy = 0.001
+    distill_alpha = 0.3          # Weight for noisy pseudo-labels
     
     # Simulate multiple devices
     all_device_logits = []
@@ -317,13 +317,12 @@ def diagnose():
     noise_scale = sensitivity / avg_eps
     
     # Analyze aggregated logit quality
-    clean_probs_t1 = F.softmax(agg_logits / 1.0, dim=1)
     clean_argmax_acc = (agg_logits.argmax(dim=1) == teacher_logits.argmax(dim=1)).float().mean()
     print(f"  N={N_participants}, avg_eps={avg_eps}, noise_scale={noise_scale:.4f}")
     print(f"  Signal std: {agg_logits.std():.4f}")
-    print(f"  Soft-label max_prob (T=1): {clean_probs_t1.max(dim=1)[0].mean():.4f}  (near-uniform for KL-div!)")
-    print(f"  Hard-label argmax accuracy: {clean_argmax_acc:.4f}  (good for CE loss)")
-    print(f"  Using: ema_beta={ema_beta}, distill_lr={distill_lr_noisy}, CE loss")
+    print(f"  Agg argmax accuracy (vs teacher): {clean_argmax_acc:.4f}")
+    print(f"  Using: α={distill_alpha}, ema_beta={ema_beta}, lr={distill_lr_noisy}")
+    print(f"  Loss = {distill_alpha}*CE(pseudo) + {1-distill_alpha:.1f}*CE(true_label)")
     
     student2 = copy.deepcopy(pretrain_model)
     student2_opt = torch.optim.Adam(student2.parameters(), lr=distill_lr_noisy)
@@ -344,17 +343,20 @@ def diagnose():
         # Hard pseudo-labels from smoothed buffer
         pseudo_labels = logit_buffer.argmax(dim=1)
         
-        # 1 distill epoch per round with CE loss
+        # 1 distill epoch with mixed loss
         student2.train()
         perm = torch.randperm(n_target)
         for start in range(0, n_target, 256):
             end = min(start + 256, n_target)
             idx = perm[start:end]
             data = augment(public_images[idx]).to(device)
-            target = pseudo_labels[idx].to(device)
+            pseudo = pseudo_labels[idx].to(device)
+            true = public_labels[idx].to(device)
             
             s_logits = student2(data)
-            loss = ce_criterion(s_logits, target)
+            loss_pseudo = ce_criterion(s_logits, pseudo)
+            loss_true = ce_criterion(s_logits, true)
+            loss = distill_alpha * loss_pseudo + (1 - distill_alpha) * loss_true
             
             student2_opt.zero_grad()
             loss.backward()
@@ -373,8 +375,8 @@ def diagnose():
                     total += target.size(0)
             acc = correct / total
             buf_err = (logit_buffer - agg_logits).abs().mean().item()
-            buf_argmax_acc = (logit_buffer.argmax(dim=1) == agg_logits.argmax(dim=1)).float().mean().item()
-            print(f"  Round {rnd+1}/100: test_acc={acc:.4f}, buf_err={buf_err:.4f}, argmax_match={buf_argmax_acc:.4f}")
+            pseudo_acc = (pseudo_labels == public_labels).float().mean().item()
+            print(f"  Round {rnd+1}/100: test_acc={acc:.4f}, buf_err={buf_err:.4f}, pseudo_acc={pseudo_acc:.4f}")
     
     noisy_distill_acc = acc
     
@@ -476,7 +478,7 @@ def diagnose():
     print(f"  Test 1 - Centralized (48k samples, 10 epochs):    {centralized_acc:.4f}")
     print(f"  Test 2 - Single device fine-tuned (from pretrain): {single_device_acc:.4f}")
     print(f"  Test 4 - Distill from 1 teacher (no noise, T=3):  {distill_acc:.4f}")
-    print(f"  Test 5 - Noisy distill + EMA + hard CE (100 rnd):  {noisy_distill_acc:.4f}")
+    print(f"  Test 5 - Noisy distill + mixed loss (\u03b1=0.3):   {noisy_distill_acc:.4f}")
     print(f"  Test 6 - Full FL (10 dev, 30 rnd, pretrain, T=3): {fl_acc:.4f}")
     print()
     print("Bottleneck analysis:")

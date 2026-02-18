@@ -47,12 +47,16 @@ class PAIDFDConfig:
     
     # Distillation
     distill_epochs: int = 1      # 1 epoch per round
-    distill_lr: float = 0.001    # Standard Adam lr (safe because EMA denoises labels)
-    temperature: float = 1.0     # T=1: clipped logits [-5,5] / T=3 → near-uniform for 100 classes
+    distill_lr: float = 0.001    # Standard Adam lr
+    temperature: float = 1.0     # Unused with hard labels, kept for compat
     
     # EMA logit buffer: averages out Laplace noise across rounds
-    # After K rounds, noise variance reduces by ~(1-β)/β compared to single-round
     ema_beta: float = 0.7        # Smoothing factor: 0.7 = effective window ~3 rounds
+    
+    # Mixed-loss distillation: prevents forgetting pre-trained knowledge
+    # loss = α * CE(pseudo_label) + (1-α) * CE(true_label)
+    # With noisy pseudo-labels, ground truth keeps model stable
+    distill_alpha: float = 0.3   # Weight for pseudo-labels (0.3 = mostly ground truth)
     
     # Pre-training on public data (FedMD "transfer learning" phase)
     pretrain_epochs: int = 50    # 50 epochs on public data (10k samples needs many passes)
@@ -187,11 +191,14 @@ class PAIDFD(FederatedMethod):
         #   6. Distill server model from teacher probs
         # ==========================================
         
-        # Collect ALL public images into a fixed tensor
+        # Collect ALL public images AND labels into fixed tensors
         public_images_list = []
-        for data, _ in public_loader:
+        public_labels_list = []
+        for data, labels in public_loader:
             public_images_list.append(data)
+            public_labels_list.append(labels)
         public_images = torch.cat(public_images_list, dim=0)
+        public_labels = torch.cat(public_labels_list, dim=0)
         n_public = len(public_images)
         
         all_logits = []  # Store CLIPPED LOGITS per device
@@ -301,16 +308,16 @@ class PAIDFD(FederatedMethod):
                     + (1 - beta) * noisy_logits_tensor[:buf_len]
                 )
             
-            # 3d. Hard-label distillation (PATE-style)
-            # With clipped logits [-5,5] and 100 classes, soft labels are
-            # near-uniform (max_prob ~13%). KL-div from near-uniform labels
-            # forces the student to also output near-uniform → unlearns.
-            # But the ARGMAX is still mostly correct → use hard pseudo-labels
-            # with CrossEntropyLoss for a strong gradient signal.
+            # 3d. Hard-label distillation with ground-truth regularization
+            # Noisy pseudo-labels are ~34% accurate (argmax flips easily)
+            # Mixed loss keeps model grounded in pre-trained knowledge
             pseudo_labels = self._logit_buffer.argmax(dim=1)  # (N,)
             
-            # 3e. Distill to server model using hard labels
-            self._distill_to_server_hard(pseudo_labels, public_images[:min_len])
+            # 3e. Distill with mixed loss
+            self._distill_to_server_hard(
+                pseudo_labels, public_images[:min_len],
+                public_labels[:min_len]
+            )
         
         # Evaluate
         accuracy = 0.0
@@ -423,26 +430,32 @@ class PAIDFD(FederatedMethod):
     def _distill_to_server_hard(
         self,
         pseudo_labels: torch.Tensor,
-        public_images: torch.Tensor
+        public_images: torch.Tensor,
+        true_labels: torch.Tensor = None
     ):
         """
-        Distill using hard pseudo-labels (PATE-style).
+        Distill using mixed loss: ground-truth regularization + pseudo-labels.
         
-        With clipped logits [-5,5] and 100 classes, soft-label KL-div fails
-        because softmax produces near-uniform distributions (max_prob ~13%).
-        Instead, take argmax of EMA-smoothed logits as pseudo-labels and
-        train with standard CrossEntropyLoss.
+        loss = α * CE(student, pseudo_label) + (1-α) * CE(student, true_label)
         
-        The argmax is much more robust to noise than soft probabilities:
-        noise must flip the TOP prediction, not just shift probabilities.
+        With noisy DP aggregation, pseudo-labels from argmax of EMA-smoothed
+        logits are only ~34% accurate (noise flips argmax for 100 classes with
+        tiny margins). Training purely on wrong pseudo-labels destroys the
+        pre-trained model. Ground-truth labels act as a regularizer, keeping
+        the model stable while any correct signal in pseudo-labels is absorbed.
+        
+        In the paper, α is a tunable privacy-accuracy tradeoff parameter.
+        Higher α = more FL knowledge transfer but more noise susceptibility.
         
         Args:
             pseudo_labels: Hard labels from argmax of smoothed logits (N,)
             public_images: Corresponding public images (N, C, H, W)
+            true_labels: Ground-truth labels for public data (N,)
         """
         self.server_model.train()
         optimizer = self.distill_optimizer
         criterion = nn.CrossEntropyLoss()
+        alpha = self.config.distill_alpha
         
         # Augmentation on normalised tensors (works for CIFAR 32x32)
         augment = transforms.Compose([
@@ -455,30 +468,30 @@ class PAIDFD(FederatedMethod):
         
         for epoch in range(self.config.distill_epochs):
             perm = torch.randperm(n_target)
-            epoch_loss = 0.0
-            n_batches = 0
             
             for start in range(0, n_target, batch_size):
                 end = min(start + batch_size, n_target)
                 idx = perm[start:end]
                 
                 data = augment(public_images[idx]).to(self.device)
-                target = pseudo_labels[idx].to(self.device)
+                pseudo = pseudo_labels[idx].to(self.device)
                 
                 # Student forward pass
                 student_logits = self.server_model(data)
                 
-                # Standard cross-entropy with hard pseudo-labels
-                loss = criterion(student_logits, target)
+                # Mixed loss: α * CE(pseudo) + (1-α) * CE(true)
+                loss_pseudo = criterion(student_logits, pseudo)
+                if true_labels is not None:
+                    true = true_labels[idx].to(self.device)
+                    loss_true = criterion(student_logits, true)
+                    loss = alpha * loss_pseudo + (1 - alpha) * loss_true
+                else:
+                    loss = loss_pseudo
                 
                 optimizer.zero_grad()
                 loss.backward()
-                # Gradient clipping for stability
                 torch.nn.utils.clip_grad_norm_(self.server_model.parameters(), 5.0)
                 optimizer.step()
-                
-                epoch_loss += loss.item()
-                n_batches += 1
     
     def aggregate(self, updates: List[Dict], weights: List[float]) -> None:
         """

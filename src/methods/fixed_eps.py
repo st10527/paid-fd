@@ -41,11 +41,14 @@ class FixedEpsilonConfig:
 
     # Distillation
     distill_epochs: int = 1
-    distill_lr: float = 0.001    # Standard Adam lr (safe because EMA denoises labels)
-    temperature: float = 1.0     # T=1: clipped logits [-5,5] / T=3 → near-uniform for 100 classes
+    distill_lr: float = 0.001
+    temperature: float = 1.0     # Unused with hard labels, kept for compat
     
     # EMA logit buffer
-    ema_beta: float = 0.7        # Smoothing factor
+    ema_beta: float = 0.7
+    
+    # Mixed-loss distillation
+    distill_alpha: float = 0.3   # Weight for pseudo-labels
 
     # Pre-training on public data
     pretrain_epochs: int = 50
@@ -131,11 +134,14 @@ class FixedEpsilon(FederatedMethod):
         else:
             participant_ids = list(range(n_devices))
 
-        # ── Collect ALL public images into fixed tensor ──
+        # ── Collect ALL public images AND labels into fixed tensors ──
         public_images_list = []
-        for data, _ in public_loader:
+        public_labels_list = []
+        for data, labels in public_loader:
             public_images_list.append(data)
+            public_labels_list.append(labels)
         public_images = torch.cat(public_images_list, dim=0)
+        public_labels = torch.cat(public_labels_list, dim=0)
         n_public = len(public_images)
 
         C = self.config.clip_bound
@@ -224,11 +230,14 @@ class FixedEpsilon(FederatedMethod):
                     + (1 - beta) * noisy_logits_tensor[:buf_len]
                 )
 
-            # Hard-label distillation (PATE-style)
+            # Hard-label distillation with ground-truth regularization
             pseudo_labels = self._logit_buffer.argmax(dim=1)
 
-            # Distill
-            self._distill_to_server_hard(pseudo_labels, public_images[:min_len])
+            # Distill with mixed loss
+            self._distill_to_server_hard(
+                pseudo_labels, public_images[:min_len],
+                public_labels[:min_len]
+            )
 
         # Evaluate
         accuracy = 0.0
@@ -288,12 +297,14 @@ class FixedEpsilon(FederatedMethod):
     def _distill_to_server_hard(
         self,
         pseudo_labels: torch.Tensor,
-        public_images: torch.Tensor
+        public_images: torch.Tensor,
+        true_labels: torch.Tensor = None
     ):
-        """Distill using hard pseudo-labels (PATE-style, same as PAID-FD)."""
+        """Distill with mixed loss: α*CE(pseudo) + (1-α)*CE(true)."""
         self.server_model.train()
         optimizer = self.distill_optimizer
         criterion = nn.CrossEntropyLoss()
+        alpha = self.config.distill_alpha
 
         augment = transforms.Compose([
             transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
@@ -310,10 +321,17 @@ class FixedEpsilon(FederatedMethod):
                 idx = perm[start:end]
 
                 data = augment(public_images[idx]).to(self.device)
-                target = pseudo_labels[idx].to(self.device)
+                pseudo = pseudo_labels[idx].to(self.device)
 
                 student_logits = self.server_model(data)
-                loss = criterion(student_logits, target)
+
+                loss_pseudo = criterion(student_logits, pseudo)
+                if true_labels is not None:
+                    true = true_labels[idx].to(self.device)
+                    loss_true = criterion(student_logits, true)
+                    loss = alpha * loss_pseudo + (1 - alpha) * loss_true
+                else:
+                    loss = loss_pseudo
 
                 optimizer.zero_grad()
                 loss.backward()
