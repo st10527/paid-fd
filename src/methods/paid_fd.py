@@ -181,20 +181,24 @@ class PAIDFD(FederatedMethod):
         self.price_history.append(price)
         
         # ==========================================
-        # [TMC Fix v4] LOGIT-SPACE aggregation with noise
+        # [TMC Fix v5] PER-DEVICE LDP noise
         #
-        # WHY logit space instead of probability space?
-        #   Probability: signal=0.01 (1/100), noise_scale=0.2 → SNR=0.05 💀
-        #   Logit:       signal=10 (range[-5,+5]), noise_scale=1.0 → SNR=7.0 ✅
-        #   → 140x improvement in signal-to-noise ratio!
+        # Each device adds Laplace noise to its own logits BEFORE upload.
+        # This is true Local DP: the server never sees clean logits.
+        #
+        # Per-device: noise_i ~ Lap(0, 2C/ε_i) for each element
+        # After averaging N devices: Var[avg] = (1/N²)Σ Var[noise_i]
+        #
+        # Key insight: noise variance decreases with 1/N.
+        # → More participants (higher γ) = less noise = better accuracy.
+        # This creates the gamma differentiation we need.
         #
         # Pipeline per round:
         #   1. Collect ALL public images into a fixed tensor
         #   2. Each device: local train → compute logits → clip to [-C, C]
-        #   3. Server: weighted average of clipped logits
-        #   4. Server: add Laplace noise (sensitivity = 2C/N per element)
-        #   5. Server: softmax(noisy_logits / T) → teacher probs
-        #   6. Distill server model from teacher probs
+        #   3. Each device: add Lap(0, 2C/ε_i) noise → upload noisy logits
+        #   4. Server: weighted average of noisy logits
+        #   5. Server: EMA buffer → pseudo-labels → mixed-loss distill
         # ==========================================
         
         # Collect ALL public images AND labels into fixed tensors
@@ -264,7 +268,22 @@ class PAIDFD(FederatedMethod):
                     logit_chunks.append(logits.cpu())
             device_logits = torch.cat(logit_chunks, dim=0)  # (n_public, K)
             
-            all_logits.append(device_logits)
+            # ── Per-device LDP: add Laplace noise LOCALLY ──
+            # Each device perturbs its own logits before upload.
+            # Sensitivity = 2C (max change in one element when clipped to [-C,C])
+            # Scale = 2C / ε_i  (device's chosen privacy level)
+            # This is true Local DP: server never sees clean logits.
+            # When server averages N noisy logits, noise var ~ 1/N.
+            # → More participants = less noise = better accuracy.
+            device_eps = decision.eps_star
+            device_sensitivity = 2.0 * C  # Per-device sensitivity
+            device_noise_scale = device_sensitivity / device_eps
+            device_noise = np.random.laplace(
+                0, device_noise_scale, device_logits.shape
+            ).astype(np.float32)
+            noisy_device_logits = device_logits + torch.from_numpy(device_noise)
+            
+            all_logits.append(noisy_device_logits)
             all_weights.append(decision.quality)
             eps_list.append(decision.eps_star)
             
@@ -279,25 +298,22 @@ class PAIDFD(FederatedMethod):
             for k in ["training", "inference", "communication"]:
                 total_energy[k] += energy.get(k, 0)
         
-        # Stage 3: Aggregate logits, add noise, distill
+        # Stage 3: Aggregate NOISY logits, distill
+        # Each device already added LDP noise locally.
+        # Averaging N noisy logits reduces noise variance by factor 1/N.
+        # → More participants (higher γ) = cleaner aggregation = better accuracy.
         if all_logits:
             N = len(all_logits)
             avg_eps = np.mean(eps_list)
             
-            # 3a. Weighted average of LOGITS
+            # 3a. Weighted average of NOISY logits (noise already added per-device)
             min_len = min(len(l) for l in all_logits)
             total_w = sum(all_weights)
             norm_w = [w / total_w for w in all_weights]
-            aggregated_logits = sum(
+            aggregated_noisy = sum(
                 w * l[:min_len] for w, l in zip(norm_w, all_logits)
             )
-            
-            # 3b. Add Laplace noise in LOGIT space
-            sensitivity_per_elem = 2.0 * C / N
-            noise_scale = sensitivity_per_elem / avg_eps
-            noise = np.random.laplace(0, noise_scale, aggregated_logits.shape)
-            noisy_logits = aggregated_logits.numpy() + noise.astype(np.float32)
-            noisy_logits_tensor = torch.from_numpy(noisy_logits).float()
+            noisy_logits_tensor = aggregated_noisy.float()
             
             # 3c. EMA logit buffer: average out noise across rounds
             # Laplace noise is zero-mean in logit space, so EMA converges

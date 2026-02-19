@@ -287,23 +287,29 @@ def diagnose():
     distill_acc = acc
     
     # ================================================================
-    # Test 5: Noisy distillation + EMA + mixed loss (ground-truth reg.)
+    # Test 5: Per-Device LDP + EMA + mixed loss (ground-truth reg.)
     # ================================================================
-    print("\n[Test 5] Noisy distillation + EMA + mixed loss (100 rounds)")
+    print("\n[Test 5] Per-Device LDP + EMA + mixed loss (100 rounds)")
     print("-" * 50)
     
-    # Mixed-loss pipeline (prevents forgetting while absorbing FL signal):
-    # 1. EMA logit buffer accumulates noisy logits (noise cancels)
-    # 2. Hard pseudo-labels from argmax of smoothed buffer
-    # 3. loss = α * CE(pseudo_label) + (1-α) * CE(true_label)
-    # Ground-truth keeps model stable; pseudo-labels contribute FL knowledge
+    # Per-device LDP pipeline:
+    # 1. Each device clips logits to [-C,C], adds Lap(0, 2C/ε_i) locally
+    # 2. Server averages N noisy logits → noise var ~ 1/N
+    # 3. EMA logit buffer further smooths across rounds
+    # 4. Hard pseudo-labels from argmax of smoothed buffer
+    # 5. loss = α * CE(pseudo_label) + (1-α) * CE(true_label)
     N_participants = 35
     avg_eps = 0.5
     ema_beta = 0.3
     distill_lr_noisy = 0.001
     distill_alpha = 0.5          # Weight for noisy pseudo-labels
     
-    # Simulate multiple devices
+    # Per-device LDP noise parameters
+    per_device_scale = 2.0 * C / avg_eps  # Each device: Lap(0, 2C/ε)
+    per_device_std = per_device_scale * np.sqrt(2)
+    agg_noise_std = per_device_std / np.sqrt(N_participants)
+    
+    # Simulate clean device logits (each with slight variation)
     all_device_logits = []
     for i in range(N_participants):
         noise_per_device = torch.randn_like(teacher_logits) * 2.0
@@ -311,16 +317,14 @@ def diagnose():
         dev_logits = torch.clamp(dev_logits, -C, C)
         all_device_logits.append(dev_logits)
     
-    agg_logits = sum(all_device_logits) / N_participants
+    # Clean aggregation (for reference)
+    clean_agg = sum(all_device_logits) / N_participants
+    clean_argmax_acc = (clean_agg.argmax(dim=1) == teacher_logits.argmax(dim=1)).float().mean()
     
-    sensitivity = 2.0 * C / N_participants
-    noise_scale = sensitivity / avg_eps
-    
-    # Analyze aggregated logit quality
-    clean_argmax_acc = (agg_logits.argmax(dim=1) == teacher_logits.argmax(dim=1)).float().mean()
-    print(f"  N={N_participants}, avg_eps={avg_eps}, noise_scale={noise_scale:.4f}")
-    print(f"  Signal std: {agg_logits.std():.4f}")
-    print(f"  Agg argmax accuracy (vs teacher): {clean_argmax_acc:.4f}")
+    print(f"  N={N_participants}, avg_eps={avg_eps}")
+    print(f"  Per-device noise scale = {per_device_scale:.4f}, std = {per_device_std:.4f}")
+    print(f"  After averaging {N_participants} devices: agg noise std = {agg_noise_std:.4f}")
+    print(f"  Clean agg argmax accuracy (vs teacher): {clean_argmax_acc:.4f}")
     print(f"  Using: α={distill_alpha}, ema_beta={ema_beta}, lr={distill_lr_noisy}")
     print(f"  Loss = {distill_alpha}*CE(pseudo) + {1-distill_alpha:.1f}*CE(true_label)")
     
@@ -330,15 +334,21 @@ def diagnose():
     logit_buffer = None
     
     for rnd in range(100):
-        # Each round: fresh Laplace noise
-        noise = np.random.laplace(0, noise_scale, agg_logits.shape).astype(np.float32)
-        noisy_logits = torch.from_numpy(agg_logits.numpy() + noise).float()
+        # Per-device LDP: each device adds independent Laplace noise
+        noisy_sum = torch.zeros_like(all_device_logits[0])
+        for i in range(N_participants):
+            dev_noise = np.random.laplace(
+                0, per_device_scale, all_device_logits[i].shape
+            ).astype(np.float32)
+            noisy_dev = all_device_logits[i] + torch.from_numpy(dev_noise)
+            noisy_sum += noisy_dev
+        noisy_avg = noisy_sum / N_participants
         
         # EMA logit buffer update
         if logit_buffer is None:
-            logit_buffer = noisy_logits.clone()
+            logit_buffer = noisy_avg.clone()
         else:
-            logit_buffer = ema_beta * logit_buffer + (1 - ema_beta) * noisy_logits
+            logit_buffer = ema_beta * logit_buffer + (1 - ema_beta) * noisy_avg
         
         # Hard pseudo-labels from smoothed buffer
         pseudo_labels = logit_buffer.argmax(dim=1)
@@ -478,7 +488,7 @@ def diagnose():
     print(f"  Test 1 - Centralized (48k samples, 10 epochs):    {centralized_acc:.4f}")
     print(f"  Test 2 - Single device fine-tuned (from pretrain): {single_device_acc:.4f}")
     print(f"  Test 4 - Distill from 1 teacher (no noise, T=3):  {distill_acc:.4f}")
-    print(f"  Test 5 - Noisy distill + mixed loss (\u03b1=0.3):   {noisy_distill_acc:.4f}")
+    print(f"  Test 5 - Per-device LDP + mixed loss (a=0.5):  {noisy_distill_acc:.4f}")
     print(f"  Test 6 - Full FL (10 dev, 30 rnd, pretrain, T=3): {fl_acc:.4f}")
     print()
     print("Bottleneck analysis:")

@@ -192,7 +192,15 @@ class FixedEpsilon(FederatedMethod):
                     logit_chunks.append(logits.cpu())
             device_logits = torch.cat(logit_chunks, dim=0)
 
-            all_logits.append(device_logits)
+            # ── Per-device LDP: add Laplace noise LOCALLY ──
+            device_sensitivity = 2.0 * C
+            device_noise_scale = device_sensitivity / self.config.epsilon
+            device_noise = np.random.laplace(
+                0, device_noise_scale, device_logits.shape
+            ).astype(np.float32)
+            noisy_device_logits = device_logits + torch.from_numpy(device_noise)
+            
+            all_logits.append(noisy_device_logits)
 
             # Energy
             energy = self.energy_calc.compute_total_energy(
@@ -204,20 +212,15 @@ class FixedEpsilon(FederatedMethod):
             for k in ["training", "inference", "communication"]:
                 total_energy[k] += energy.get(k, 0)
 
-        # ── Aggregate: simple average + FIXED-ε noise ──
+        # ── Aggregate NOISY logits (per-device LDP noise already added) ──
+        # Averaging N noisy logits reduces noise variance by 1/N.
         if all_logits:
             N = len(all_logits)
             min_len = min(len(l) for l in all_logits)
 
-            # Simple average (equal weights, no quality-based weighting)
-            aggregated_logits = sum(l[:min_len] for l in all_logits) / N
-
-            # Add Laplace noise with FIXED epsilon
-            sensitivity_per_elem = 2.0 * C / N
-            noise_scale = sensitivity_per_elem / self.config.epsilon
-            noise = np.random.laplace(0, noise_scale, aggregated_logits.shape)
-            noisy_logits = aggregated_logits.numpy() + noise.astype(np.float32)
-            noisy_logits_tensor = torch.from_numpy(noisy_logits).float()
+            # Simple average of NOISY logits
+            aggregated_noisy = sum(l[:min_len] for l in all_logits) / N
+            noisy_logits_tensor = aggregated_noisy.float()
 
             # EMA logit buffer: average out noise across rounds
             beta = self.config.ema_beta
