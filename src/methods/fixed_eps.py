@@ -45,13 +45,13 @@ class FixedEpsilonConfig:
     temperature: float = 1.0     # Unused with hard labels, kept for compat
     
     # EMA logit buffer
-    ema_beta: float = 0.7
+    ema_beta: float = 0.3
     
     # Mixed-loss distillation
-    distill_alpha: float = 0.3   # Weight for pseudo-labels
+    distill_alpha: float = 0.5   # Weight for pseudo-labels (balanced)
 
     # Pre-training on public data
-    pretrain_epochs: int = 50
+    pretrain_epochs: int = 10
     pretrain_lr: float = 0.1
 
     # Privacy

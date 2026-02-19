@@ -373,8 +373,9 @@ def _create_method(method_name: str, model, config: dict, device: str):
             distill_epochs=1,       # 1 epoch/round
             distill_lr=0.001,
             temperature=1.0,
-            ema_beta=0.7,           # Logit buffer smoothing
-            distill_alpha=0.3,      # Mixed loss: 0.3*pseudo + 0.7*true
+            ema_beta=0.3,           # Mild EMA: preserves gamma noise diffs
+            distill_alpha=0.5,      # Balanced: 0.5*pseudo + 0.5*true
+            pretrain_epochs=10,     # 10 ep: ~35-40% start, FL has room
             clip_bound=mc.get('clip_bound', 5.0),
             public_samples=mc.get('public_samples_per_round', 1000),
         )
@@ -389,8 +390,9 @@ def _create_method(method_name: str, model, config: dict, device: str):
             distill_epochs=1,
             distill_lr=0.001,
             temperature=1.0,
-            ema_beta=0.7,
-            distill_alpha=0.3,      # Mixed loss: 0.3*pseudo + 0.7*true
+            ema_beta=0.3,           # Mild EMA: preserves noise diffs
+            distill_alpha=0.5,      # Balanced: 0.5*pseudo + 0.5*true
+            pretrain_epochs=10,     # Match PAID-FD
             clip_bound=5.0,
             participation_rate=mc.get('participation_rate', 1.0),
             samples_per_device=mc.get('samples_per_device', 100),
@@ -452,9 +454,9 @@ def run_phase1_gamma(device: str, seeds: list, n_rounds: int, quick: bool = Fals
     print("Phase 1.1: Gamma Sensitivity Analysis")
     print("=" * 70)
     
-    gamma_values = [3, 5, 7, 10, 15, 20]
+    gamma_values = [3, 5, 7, 10, 15]
     if quick:
-        gamma_values = [5, 10]
+        gamma_values = [3, 7]
     
     results = {'phase': 'phase1_gamma', 'gamma_values': gamma_values, 'runs': {}}
     
@@ -465,8 +467,8 @@ def run_phase1_gamma(device: str, seeds: list, n_rounds: int, quick: bool = Fals
             print(f"  Seed {seed}:")
             config = {
                 'n_devices': 50, 'gamma': gamma, 'alpha': 0.5,
-                'local_epochs': 3, 'local_lr': 0.01, 'local_momentum': 0.9,
-                'distill_epochs': 5, 'distill_lr': 0.001, 'temperature': 3.0,
+                'local_epochs': 5, 'local_lr': 0.01, 'local_momentum': 0.9,
+                'distill_epochs': 1, 'distill_lr': 0.001, 'temperature': 1.0,
                 'public_samples': 20000,
                 'synthetic': quick,
                 'heterogeneity': {

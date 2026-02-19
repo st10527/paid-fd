@@ -41,7 +41,7 @@ from ..models.utils import copy_model
 class FedMDConfig:
     """Configuration for FedMD."""
     # Local training (per round — models persist across rounds)
-    local_epochs: int = 3
+    local_epochs: int = 5         # Match PAID-FD for fair comparison
     local_lr: float = 0.01
     local_momentum: float = 0.9
 
@@ -51,7 +51,7 @@ class FedMDConfig:
     temperature: float = 3.0
 
     # Pre-training on public data
-    pretrain_epochs: int = 50
+    pretrain_epochs: int = 10     # Match PAID-FD for fair comparison
     pretrain_lr: float = 0.1
 
     # Logit clipping (for stability, not privacy)

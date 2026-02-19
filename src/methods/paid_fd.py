@@ -30,10 +30,12 @@ class PAIDFDConfig:
     Configuration for PAID-FD.
     
     Key design: persistent local models.
-    Each device keeps its own model across rounds and does 1 local epoch
-    per round. Over 100 rounds, this accumulates 100 epochs of training.
-    This is both faster (1 epoch vs 5) and produces better logits
-    (models improve over rounds instead of being re-initialized).
+    Each device keeps its own model across rounds and does local epochs
+    per round. Over 100 rounds, this accumulates training.
+    
+    Pre-training is kept moderate (10 epochs) so that FL contribution
+    matters — ensemble diversity (more participants) creates real signal
+    differences across gamma values.
     """
     # Game parameters
     gamma: float = 10.0          # Server valuation coefficient
@@ -41,7 +43,7 @@ class PAIDFDConfig:
     budget: float = float('inf') # Budget constraint
     
     # Local training (per round — models persist across rounds)
-    local_epochs: int = 3        # 3 epochs/round for better logits, persistent model
+    local_epochs: int = 5        # 5 epochs/round → more local divergence → ensemble diversity
     local_lr: float = 0.01       # SGD fine-tuning lr (models start pre-trained)
     local_momentum: float = 0.9  # Standard SGD momentum
     
@@ -51,15 +53,19 @@ class PAIDFDConfig:
     temperature: float = 1.0     # Unused with hard labels, kept for compat
     
     # EMA logit buffer: averages out Laplace noise across rounds
-    ema_beta: float = 0.7        # Smoothing factor: 0.7 = effective window ~3 rounds
+    # β=0.3 preserves noise differences across gamma levels
+    # (β=0.7 was equalizing all gamma noise to ~100% pseudo-acc)
+    ema_beta: float = 0.3        # Smoothing factor: 0.3 = mild smoothing, preserves gamma diffs
     
     # Mixed-loss distillation: prevents forgetting pre-trained knowledge
     # loss = α * CE(pseudo_label) + (1-α) * CE(true_label)
-    # With noisy pseudo-labels, ground truth keeps model stable
-    distill_alpha: float = 0.3   # Weight for pseudo-labels (0.3 = mostly ground truth)
+    # α=0.5 balanced: with less pre-training, model can absorb more FL signal
+    distill_alpha: float = 0.5   # Weight for pseudo-labels (balanced)
     
     # Pre-training on public data (FedMD "transfer learning" phase)
-    pretrain_epochs: int = 50    # 50 epochs on public data (10k samples needs many passes)
+    # 10 epochs → ~35-40% start, leaving ~20% room for FL improvement
+    # This makes ensemble diversity (N devices) actually matter
+    pretrain_epochs: int = 10    # 10 epochs: moderate start, FL has room
     pretrain_lr: float = 0.1     # Standard SGD lr for pre-training
     
     # Privacy
