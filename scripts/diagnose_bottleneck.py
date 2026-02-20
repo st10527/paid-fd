@@ -287,22 +287,19 @@ def diagnose():
     distill_acc = acc
     
     # ================================================================
-    # Test 5: Per-Device LDP + EMA + mixed loss (ground-truth reg.)
+    # Test 5: Per-Device LDP + Soft-Label KL (no EMA, no ground-truth)
     # ================================================================
-    print("\n[Test 5] Per-Device LDP + EMA + mixed loss (100 rounds)")
+    print("\n[Test 5] Per-Device LDP + Soft-Label KL distillation (100 rounds)")
     print("-" * 50)
     
-    # Per-device LDP pipeline:
+    # Per-device LDP pipeline (v6):
     # 1. Each device clips logits to [-C,C], adds Lap(0, 2C/ε_i) locally
     # 2. Server averages N noisy logits → noise var ~ 1/N
-    # 3. EMA logit buffer further smooths across rounds
-    # 4. Hard pseudo-labels from argmax of smoothed buffer
-    # 5. loss = α * CE(pseudo_label) + (1-α) * CE(true_label)
+    # 3. Soft teacher probs = softmax(noisy_avg / T)
+    # 4. loss = KL(log_softmax(student/T), teacher_probs) * T²
     N_participants = 35
     avg_eps = 0.5
-    ema_beta = 0.3
     distill_lr_noisy = 0.001
-    distill_alpha = 0.5          # Weight for noisy pseudo-labels
     
     # Per-device LDP noise parameters
     per_device_scale = 2.0 * C / avg_eps  # Each device: Lap(0, 2C/ε)
@@ -325,13 +322,10 @@ def diagnose():
     print(f"  Per-device noise scale = {per_device_scale:.4f}, std = {per_device_std:.4f}")
     print(f"  After averaging {N_participants} devices: agg noise std = {agg_noise_std:.4f}")
     print(f"  Clean agg argmax accuracy (vs teacher): {clean_argmax_acc:.4f}")
-    print(f"  Using: α={distill_alpha}, ema_beta={ema_beta}, lr={distill_lr_noisy}")
-    print(f"  Loss = {distill_alpha}*CE(pseudo) + {1-distill_alpha:.1f}*CE(true_label)")
+    print(f"  Using: soft-label KL (T={T}), lr={distill_lr_noisy}, no EMA, no ground-truth reg")
     
     student2 = copy.deepcopy(pretrain_model)
     student2_opt = torch.optim.Adam(student2.parameters(), lr=distill_lr_noisy)
-    ce_criterion = nn.CrossEntropyLoss()
-    logit_buffer = None
     
     for rnd in range(100):
         # Per-device LDP: each device adds independent Laplace noise
@@ -344,29 +338,24 @@ def diagnose():
             noisy_sum += noisy_dev
         noisy_avg = noisy_sum / N_participants
         
-        # EMA logit buffer update
-        if logit_buffer is None:
-            logit_buffer = noisy_avg.clone()
-        else:
-            logit_buffer = ema_beta * logit_buffer + (1 - ema_beta) * noisy_avg
+        # Soft teacher probs from noisy aggregated logits (no EMA)
+        noisy_teacher_probs = F.softmax(noisy_avg / T, dim=1)
         
-        # Hard pseudo-labels from smoothed buffer
-        pseudo_labels = logit_buffer.argmax(dim=1)
-        
-        # 1 distill epoch with mixed loss
+        # 1 distill epoch with pure KL loss
         student2.train()
         perm = torch.randperm(n_target)
         for start in range(0, n_target, 256):
             end = min(start + 256, n_target)
             idx = perm[start:end]
             data = augment(public_images[idx]).to(device)
-            pseudo = pseudo_labels[idx].to(device)
-            true = public_labels[idx].to(device)
+            target_probs = noisy_teacher_probs[idx].to(device)
             
             s_logits = student2(data)
-            loss_pseudo = ce_criterion(s_logits, pseudo)
-            loss_true = ce_criterion(s_logits, true)
-            loss = distill_alpha * loss_pseudo + (1 - distill_alpha) * loss_true
+            loss = F.kl_div(
+                F.log_softmax(s_logits / T, dim=1),
+                target_probs,
+                reduction='batchmean'
+            ) * (T * T)
             
             student2_opt.zero_grad()
             loss.backward()
@@ -384,9 +373,13 @@ def diagnose():
                     correct += (pred == target).sum().item()
                     total += target.size(0)
             acc = correct / total
-            buf_err = (logit_buffer - agg_logits).abs().mean().item()
-            pseudo_acc = (pseudo_labels == public_labels).float().mean().item()
-            print(f"  Round {rnd+1}/100: test_acc={acc:.4f}, buf_err={buf_err:.4f}, pseudo_acc={pseudo_acc:.4f}")
+            # KL between clean and noisy soft labels
+            clean_p = F.softmax(clean_agg / T, dim=1)
+            kl = F.kl_div(
+                (noisy_teacher_probs + 1e-10).log(), clean_p,
+                reduction='batchmean'
+            ).item()
+            print(f"  Round {rnd+1}/100: test_acc={acc:.4f}, KL(clean||noisy)={kl:.4f}")
     
     noisy_distill_acc = acc
     
@@ -488,7 +481,7 @@ def diagnose():
     print(f"  Test 1 - Centralized (48k samples, 10 epochs):    {centralized_acc:.4f}")
     print(f"  Test 2 - Single device fine-tuned (from pretrain): {single_device_acc:.4f}")
     print(f"  Test 4 - Distill from 1 teacher (no noise, T=3):  {distill_acc:.4f}")
-    print(f"  Test 5 - Per-device LDP + mixed loss (a=0.5):  {noisy_distill_acc:.4f}")
+    print(f"  Test 5 - Per-device LDP + soft-label KL:          {noisy_distill_acc:.4f}")
     print(f"  Test 6 - Full FL (10 dev, 30 rnd, pretrain, T=3): {fl_acc:.4f}")
     print()
     print("Bottleneck analysis:")

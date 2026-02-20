@@ -29,9 +29,15 @@ class PAIDFDConfig:
     """
     Configuration for PAID-FD.
     
-    Key design: persistent local models.
+    Key design: persistent local models + soft-label KL distillation.
     Each device keeps its own model across rounds and does local epochs
     per round. Over 100 rounds, this accumulates training.
+    
+    Distillation uses soft-label KL divergence (not hard-label CE):
+    - Preserves full logit distribution information under DP noise
+    - Temperature T=3.0 extracts dark knowledge (class similarities)
+    - No EMA buffer needed (SGD naturally averages noise across rounds)
+    - Pure FL signal (no ground-truth regularisation)
     
     Pre-training is kept moderate (10 epochs) so that FL contribution
     matters — ensemble diversity (more participants) creates real signal
@@ -47,20 +53,10 @@ class PAIDFDConfig:
     local_lr: float = 0.01       # SGD fine-tuning lr (models start pre-trained)
     local_momentum: float = 0.9  # Standard SGD momentum
     
-    # Distillation
-    distill_epochs: int = 1      # 1 epoch per round
-    distill_lr: float = 0.001    # Standard Adam lr
-    temperature: float = 1.0     # Unused with hard labels, kept for compat
-    
-    # EMA logit buffer: averages out Laplace noise across rounds
-    # β=0.3 preserves noise differences across gamma levels
-    # (β=0.7 was equalizing all gamma noise to ~100% pseudo-acc)
-    ema_beta: float = 0.3        # Smoothing factor: 0.3 = mild smoothing, preserves gamma diffs
-    
-    # Mixed-loss distillation: prevents forgetting pre-trained knowledge
-    # loss = α * CE(pseudo_label) + (1-α) * CE(true_label)
-    # α=0.5 balanced: with less pre-training, model can absorb more FL signal
-    distill_alpha: float = 0.5   # Weight for pseudo-labels (balanced)
+    # Distillation (soft-label KL, same pipeline as FedMD but with noisy logits)
+    distill_epochs: int = 1      # 1 epoch/round (noisy targets change each round)
+    distill_lr: float = 0.001    # Adam lr for distillation
+    temperature: float = 3.0     # Soft-label T=3: preserves dark knowledge under noise
     
     # Pre-training on public data (FedMD "transfer learning" phase)
     # 10 epochs → ~35-40% start, leaving ~20% room for FL improvement
@@ -85,10 +81,10 @@ class PAIDFD(FederatedMethod):
     3. Each device locally computes (s_i*, ε_i*) via DeviceBR
     4. Participating devices:
        a. Train local model on private data
-       b. Compute logits on public data
-       c. Add LDP noise
+       b. Compute logits on public data, clip to [-C, C]
+       c. Add per-device LDP noise: Lap(0, 2C/ε_i)
        d. Upload noisy logits
-    5. Server aggregates logits and distills to global model
+    5. Server averages noisy logits → softmax(T=3) → KL distillation
     
     Usage:
         config = PAIDFDConfig(gamma=10.0)
@@ -137,9 +133,8 @@ class PAIDFD(FederatedMethod):
         # Pre-training state
         self._pretrained = False
         
-        # EMA logit buffer: accumulates signal, cancels noise across rounds
-        # Laplace noise is zero-mean in logit space → EMA converges to true logits
-        self._logit_buffer = None  # Will be initialized on first round
+        # Privacy accounting: track cumulative ε per device across rounds
+        self.privacy_spent = {}  # device_id -> cumulative epsilon
         
         # Track statistics
         self.price_history = []
@@ -181,24 +176,21 @@ class PAIDFD(FederatedMethod):
         self.price_history.append(price)
         
         # ==========================================
-        # [TMC Fix v5] PER-DEVICE LDP noise
+        # [TMC Fix v6] PER-DEVICE LDP + SOFT-LABEL KL
         #
-        # Each device adds Laplace noise to its own logits BEFORE upload.
-        # This is true Local DP: the server never sees clean logits.
+        # Per-device LDP: each device adds Lap(0, 2C/ε_i) locally.
+        # Soft-label KL: preserves full logit distribution under noise.
         #
         # Per-device: noise_i ~ Lap(0, 2C/ε_i) for each element
         # After averaging N devices: Var[avg] = (1/N²)Σ Var[noise_i]
-        #
-        # Key insight: noise variance decreases with 1/N.
-        # → More participants (higher γ) = less noise = better accuracy.
-        # This creates the gamma differentiation we need.
+        # → More participants = less noise = better soft labels.
         #
         # Pipeline per round:
         #   1. Collect ALL public images into a fixed tensor
-        #   2. Each device: local train → compute logits → clip to [-C, C]
-        #   3. Each device: add Lap(0, 2C/ε_i) noise → upload noisy logits
-        #   4. Server: weighted average of noisy logits
-        #   5. Server: EMA buffer → pseudo-labels → mixed-loss distill
+        #   2. Each device: local train → logits → clip [-C,C] → Lap noise
+        #   3. Server: weighted average of noisy logits
+        #   4. Server: softmax(agg_logits / T) → teacher probs
+        #   5. Server: KL distillation from teacher probs (no EMA)
         # ==========================================
         
         # Collect ALL public images AND labels into fixed tensors
@@ -298,10 +290,10 @@ class PAIDFD(FederatedMethod):
             for k in ["training", "inference", "communication"]:
                 total_energy[k] += energy.get(k, 0)
         
-        # Stage 3: Aggregate NOISY logits, distill
+        # Stage 3: Aggregate NOISY logits, distill via soft-label KL
         # Each device already added LDP noise locally.
         # Averaging N noisy logits reduces noise variance by factor 1/N.
-        # → More participants (higher γ) = cleaner aggregation = better accuracy.
+        # Soft-label KL preserves full distribution info under noise.
         if all_logits:
             N = len(all_logits)
             avg_eps = np.mean(eps_list)
@@ -315,31 +307,18 @@ class PAIDFD(FederatedMethod):
             )
             noisy_logits_tensor = aggregated_noisy.float()
             
-            # 3c. EMA logit buffer: average out noise across rounds
-            # Laplace noise is zero-mean in logit space, so EMA converges
-            # to true aggregated logits. After K rounds, noise variance
-            # reduces by factor ~(1-β)/(1+β) compared to single round.
-            beta = self.config.ema_beta
-            if self._logit_buffer is None:
-                self._logit_buffer = noisy_logits_tensor.clone()
-            else:
-                # Handle size changes (rare: different n_public)
-                buf_len = min(len(self._logit_buffer), len(noisy_logits_tensor))
-                self._logit_buffer = (
-                    beta * self._logit_buffer[:buf_len]
-                    + (1 - beta) * noisy_logits_tensor[:buf_len]
-                )
+            # 3b. Soft-label KL distillation (no EMA needed)
+            # Temperature T preserves dark knowledge under noise.
+            # SGD over 100 rounds naturally averages noise.
+            T = self.config.temperature
+            teacher_probs = F.softmax(noisy_logits_tensor / T, dim=1)
             
-            # 3d. Hard-label distillation with ground-truth regularization
-            # Noisy pseudo-labels are ~34% accurate (argmax flips easily)
-            # Mixed loss keeps model grounded in pre-trained knowledge
-            pseudo_labels = self._logit_buffer.argmax(dim=1)  # (N,)
+            # 3c. Distill to server model via KL divergence
+            self._distill_to_server_kl(teacher_probs, public_images[:min_len])
             
-            # 3e. Distill with mixed loss
-            self._distill_to_server_hard(
-                pseudo_labels, public_images[:min_len],
-                public_labels[:min_len]
-            )
+            # 3d. Privacy accounting
+            for dev_id, eps in zip(participants, eps_list):
+                self.privacy_spent[dev_id] = self.privacy_spent.get(dev_id, 0) + eps
         
         # Evaluate
         accuracy = 0.0
@@ -366,7 +345,9 @@ class PAIDFD(FederatedMethod):
                 "avg_s": game_result["avg_s"],
                 "avg_eps": game_result["avg_eps"],
                 "server_utility": game_result["server_utility"],
-                "total_quality": game_result["total_quality"]
+                "total_quality": game_result["total_quality"],
+                "max_privacy_spent": max(self.privacy_spent.values()) if self.privacy_spent else 0,
+                "avg_privacy_spent": float(np.mean(list(self.privacy_spent.values()))) if self.privacy_spent else 0,
             }
         )
         
@@ -449,43 +430,36 @@ class PAIDFD(FederatedMethod):
         
         print(f"  [Pre-training] Done. All local models will start from this checkpoint.")
     
-    def _distill_to_server_hard(
+    def _distill_to_server_kl(
         self,
-        pseudo_labels: torch.Tensor,
-        public_images: torch.Tensor,
-        true_labels: torch.Tensor = None
+        teacher_probs: torch.Tensor,
+        public_images: torch.Tensor
     ):
         """
-        Distill using mixed loss: ground-truth regularization + pseudo-labels.
+        Distill via KL divergence from soft teacher probabilities.
         
-        loss = α * CE(student, pseudo_label) + (1-α) * CE(student, true_label)
+        loss = KL(softmax(student_logits/T) || teacher_probs) * T²
         
-        With noisy DP aggregation, pseudo-labels from argmax of EMA-smoothed
-        logits are only ~34% accurate (noise flips argmax for 100 classes with
-        tiny margins). Training purely on wrong pseudo-labels destroys the
-        pre-trained model. Ground-truth labels act as a regularizer, keeping
-        the model stable while any correct signal in pseudo-labels is absorbed.
-        
-        In the paper, α is a tunable privacy-accuracy tradeoff parameter.
-        Higher α = more FL knowledge transfer but more noise susceptibility.
+        Identical to FedMD's distillation pipeline, but teacher_probs
+        are computed from DP-noisy aggregated logits instead of clean ones.
+        Soft labels preserve the full probability distribution (dark knowledge)
+        which is more robust to noise than hard-label argmax.
         
         Args:
-            pseudo_labels: Hard labels from argmax of smoothed logits (N,)
+            teacher_probs: Soft target probabilities from noisy logits (N, K)
             public_images: Corresponding public images (N, C, H, W)
-            true_labels: Ground-truth labels for public data (N,)
         """
         self.server_model.train()
         optimizer = self.distill_optimizer
-        criterion = nn.CrossEntropyLoss()
-        alpha = self.config.distill_alpha
+        T = self.config.temperature
         
-        # Augmentation on normalised tensors (works for CIFAR 32x32)
+        # Augmentation on normalised tensors (works for CIFAR 32×32)
         augment = transforms.Compose([
             transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
             transforms.RandomHorizontalFlip(),
         ])
         
-        n_target = min(len(pseudo_labels), len(public_images))
+        n_target = min(len(teacher_probs), len(public_images))
         batch_size = 256
         
         for epoch in range(self.config.distill_epochs):
@@ -496,19 +470,14 @@ class PAIDFD(FederatedMethod):
                 idx = perm[start:end]
                 
                 data = augment(public_images[idx]).to(self.device)
-                pseudo = pseudo_labels[idx].to(self.device)
+                target = teacher_probs[idx].to(self.device)
                 
-                # Student forward pass
                 student_logits = self.server_model(data)
-                
-                # Mixed loss: α * CE(pseudo) + (1-α) * CE(true)
-                loss_pseudo = criterion(student_logits, pseudo)
-                if true_labels is not None:
-                    true = true_labels[idx].to(self.device)
-                    loss_true = criterion(student_logits, true)
-                    loss = alpha * loss_pseudo + (1 - alpha) * loss_true
-                else:
-                    loss = loss_pseudo
+                loss = F.kl_div(
+                    F.log_softmax(student_logits / T, dim=1),
+                    target,
+                    reduction='batchmean'
+                ) * (T * T)
                 
                 optimizer.zero_grad()
                 loss.backward()
