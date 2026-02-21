@@ -374,7 +374,7 @@ def _create_method(method_name: str, model, config: dict, device: str):
             distill_lr=0.001,
             temperature=3.0,        # Soft-label T=3: preserves dark knowledge under noise
             pretrain_epochs=10,     # 10 ep: ~35-40% start, FL has room
-            clip_bound=mc.get('clip_bound', 5.0),
+            clip_bound=mc.get('clip_bound', 2.0),   # C=2: reduced sensitivity
             public_samples=mc.get('public_samples_per_round', 1000),
         )
         return PAIDFD(m, cfg, 100, device)
@@ -389,7 +389,7 @@ def _create_method(method_name: str, model, config: dict, device: str):
             distill_lr=0.001,
             temperature=3.0,        # Soft-label T=3: match PAID-FD
             pretrain_epochs=10,     # Match PAID-FD
-            clip_bound=5.0,
+            clip_bound=2.0,              # Match PAID-FD C=2
             participation_rate=mc.get('participation_rate', 1.0),
             samples_per_device=mc.get('samples_per_device', 100),
         )

@@ -193,7 +193,7 @@ def diagnose():
     print(f"  Logit mean: {logits.mean():.4f}, std: {logits.std():.4f}")
     
     # After clipping
-    C = 5.0
+    C = 2.0  # Match PAID-FD C=2
     clipped = torch.clamp(logits, -C, C)
     print(f"  After clip to [-{C},{C}]:")
     print(f"    range: [{clipped.min():.2f}, {clipped.max():.2f}]")

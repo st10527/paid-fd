@@ -65,7 +65,7 @@ class PAIDFDConfig:
     pretrain_lr: float = 0.1     # Standard SGD lr for pre-training
     
     # Privacy
-    clip_bound: float = 5.0      # Logit clipping for LDP
+    clip_bound: float = 2.0      # Logit clipping for LDP (C=2: balances signal preservation vs noise)
     
     # Public data
     public_samples: int = 20000  # 200/class for better pre-training & logit diversity
@@ -176,19 +176,20 @@ class PAIDFD(FederatedMethod):
         self.price_history.append(price)
         
         # ==========================================
-        # [TMC Fix v6] PER-DEVICE LDP + SOFT-LABEL KL
+        # [TMC Fix v7] PER-DEVICE LDP + BLUE AGG + SOFT-LABEL KL
         #
         # Per-device LDP: each device adds Lap(0, 2C/ε_i) locally.
+        # BLUE aggregation: w_i ∝ ε_i² (inverse-variance optimal weights).
         # Soft-label KL: preserves full logit distribution under noise.
         #
         # Per-device: noise_i ~ Lap(0, 2C/ε_i) for each element
-        # After averaging N devices: Var[avg] = (1/N²)Σ Var[noise_i]
-        # → More participants = less noise = better soft labels.
+        # BLUE weights: w_i = ε_i² / Σ ε_j² (minimises aggregated variance)
+        # → High-ε devices contribute more; noisy marginal devices down-weighted.
         #
         # Pipeline per round:
         #   1. Collect ALL public images into a fixed tensor
         #   2. Each device: local train → logits → clip [-C,C] → Lap noise
-        #   3. Server: weighted average of noisy logits
+        #   3. Server: ε²-weighted (BLUE) average of noisy logits
         #   4. Server: softmax(agg_logits / T) → teacher probs
         #   5. Server: KL distillation from teacher probs (no EMA)
         # ==========================================
@@ -276,7 +277,10 @@ class PAIDFD(FederatedMethod):
             noisy_device_logits = device_logits + torch.from_numpy(device_noise)
             
             all_logits.append(noisy_device_logits)
-            all_weights.append(decision.quality)
+            # BLUE (Best Linear Unbiased Estimator): w_i ∝ ε_i²
+            # Var[noise_i] = 2(2C/ε_i)² ∝ 1/ε_i², so inverse-variance weight ∝ ε_i²
+            # This down-weights high-noise (low-ε) devices optimally.
+            all_weights.append(decision.eps_star ** 2)
             eps_list.append(decision.eps_star)
             
             # Energy accounting

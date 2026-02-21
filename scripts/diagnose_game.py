@@ -65,6 +65,7 @@ for gamma in gamma_values:
         'avg_eps': np.mean(eps_vals),
         'min_eps': min(eps_vals),
         'max_eps': max(eps_vals),
+        'eps_vals': eps_vals,  # per-device ε for BLUE simulation
         'avg_s': np.mean(s_vals),
         'Q': result['total_quality'],
         'U': result['server_utility'],
@@ -80,18 +81,18 @@ for gamma in gamma_values:
 # 2. NOISE LAYER: Per-Device LDP → average → noise on pseudo-labels
 # ============================================================
 print("\n" + "=" * 70)
-print("STEP 2: Per-Device LDP Noise Analysis")
-print("  Each device adds Lap(0, 2C/ε_i) locally → server averages N noisy logits")
-print("  After averaging: Var[avg] = (1/N²)·Σ Var[noise_i] ∝ 1/N")
+print("STEP 2: Per-Device LDP Noise Analysis (BLUE vs Uniform)")
+print("  Each device adds Lap(0, 2C/ε_i) locally → server aggregates")
+print("  BLUE: w_i ∝ ε_i² (inverse-variance optimal weighting)")
 print("=" * 70)
 
-C = 5.0  # clip_bound
+C = 2.0  # clip_bound (C=2: reduced sensitivity, better SNR)
 print(f"Clip bound C = {C}")
 print()
 
-print(f"{'gamma':>6} {'N':>4} {'avg_ε':>7} {'per_dev_σ':>10} {'agg_σ':>8} "
-      f"{'SNR':>6}")
-print("-" * 50)
+print(f"{'gamma':>6} {'N':>4} {'avg_ε':>7} {'per_dev_σ':>10} "
+      f"{'unif_σ':>8} {'BLUE_σ':>8} {'SNR_unif':>9} {'SNR_BLUE':>9}")
+print("-" * 70)
 
 for gamma in gamma_values:
     r = game_results[gamma]
@@ -99,38 +100,44 @@ for gamma in gamma_values:
         continue
     
     N = r['N']
+    eps_vals = r['eps_vals']
     avg_eps = r['avg_eps']
     
-    # Per-device LDP: each device adds Lap(0, 2C/ε_i)
-    # Per-device Laplace scale = 2C / avg_ε
-    per_device_scale = 2.0 * C / avg_eps
-    per_device_std = per_device_scale * np.sqrt(2)  # Laplace std = scale * sqrt(2)
+    # Per-device: Lap(0, 2C/ε_i), Var = 2(2C/ε_i)²
+    per_device_vars = [2 * (2*C/e)**2 for e in eps_vals]
+    per_device_stds = [np.sqrt(v) for v in per_device_vars]
+    avg_per_dev_std = np.mean(per_device_stds)
     
-    # After averaging N devices: Var[avg] = Var[per_device] / N
-    # So std[avg] = std[per_device] / sqrt(N)
-    aggregated_noise_std = per_device_std / np.sqrt(N)
-    aggregated_noise_scale = per_device_scale / np.sqrt(N)  # effective Laplace scale
+    # Uniform averaging: Var_unif = (1/N²) Σ Var_i
+    var_unif = sum(per_device_vars) / (N**2)
+    std_unif = np.sqrt(var_unif)
     
-    # Signal magnitude: logits in [-C, C], typical spread ~C
-    signal_mag = C
-    snr = signal_mag / aggregated_noise_std
+    # BLUE: w_i = ε_i² / Σ ε_j², Var_BLUE = 1 / Σ(1/Var_i)
+    # Actually: Var_BLUE = 1 / Σ(ε_i²/(8C²)) = 8C² / Σ ε_i²
+    sum_eps_sq = sum(e**2 for e in eps_vals)
+    var_blue = 8 * C**2 / sum_eps_sq
+    std_blue = np.sqrt(var_blue)
     
-    r['per_device_scale'] = per_device_scale
-    r['per_device_std'] = per_device_std
-    r['noise_scale'] = aggregated_noise_scale  # used in Step 3 Monte Carlo
-    r['noise_std'] = aggregated_noise_std
-    r['snr'] = snr
+    snr_unif = C / std_unif
+    snr_blue = C / std_blue
     
-    print(f"{gamma:>6} {N:>4} {avg_eps:>7.3f} {per_device_std:>10.4f} "
-          f"{aggregated_noise_std:>8.4f} "
-          f"{snr:>6.2f}")
+    r['per_device_scale'] = 2.0 * C / avg_eps  # for MC simulation
+    r['per_device_std'] = avg_per_dev_std
+    r['noise_std'] = std_unif
+    r['noise_std_blue'] = std_blue
+    r['snr'] = snr_unif
+    r['snr_blue'] = snr_blue
+    
+    print(f"{gamma:>6} {N:>4} {avg_eps:>7.3f} {avg_per_dev_std:>10.4f} "
+          f"{std_unif:>8.4f} {std_blue:>8.4f} "
+          f"{snr_unif:>9.2f} {snr_blue:>9.2f}")
 
 # ============================================================
-# 3. SIMULATE pseudo-label + soft-label quality (Per-Device LDP)
+# 3. SIMULATE pseudo-label + soft-label quality (BLUE aggregation)
 # ============================================================
 print("\n" + "=" * 70)
-print("STEP 3: Pseudo-Label & Soft-Label Quality (1-round, no EMA)")
-print("  Per-device LDP noise → average → softmax(T=3) → quality metrics")
+print("STEP 3: Soft-Label Quality with BLUE Aggregation")
+print("  Per-device LDP → ε²-weighted avg → softmax(T=3) → quality metrics")
 print("=" * 70)
 
 np.random.seed(42)
@@ -160,7 +167,7 @@ clean_probs = softmax_np(true_logits, T)
 
 n_mc = 20
 
-print(f"{'gamma':>6} {'N':>4} {'agg_σ':>8} {'argmax%':>9} {'top5%':>7} "
+print(f"{'gamma':>6} {'N':>4} {'BLUE_σ':>8} {'argmax%':>9} {'top5%':>7} "
       f"{'KL_div':>8} {'soft_CE':>8}")
 print("-" * 60)
 
@@ -170,15 +177,21 @@ for gamma in gamma_values:
         continue
     
     N = r['N']
-    per_device_scale = r['per_device_scale']
+    eps_vals = r['eps_vals']
+    
+    # BLUE weights: w_i ∝ ε_i²
+    eps_sq = np.array([e**2 for e in eps_vals])
+    w_blue = eps_sq / eps_sq.sum()
     
     acc_list, top5_list, kl_list, ce_list = [], [], [], []
     for _ in range(n_mc):
-        noisy_sum = np.zeros_like(true_logits)
-        for dev in range(N):
-            device_noise = np.random.laplace(0, per_device_scale, true_logits.shape)
-            noisy_sum += (true_logits + device_noise)
-        avg_logits = noisy_sum / N
+        # ε²-weighted (BLUE) aggregation with per-device noise
+        weighted_sum = np.zeros_like(true_logits)
+        for j, eps_j in enumerate(eps_vals):
+            scale_j = 2.0 * C / eps_j
+            noise_j = np.random.laplace(0, scale_j, true_logits.shape)
+            weighted_sum += w_blue[j] * (true_logits + noise_j)
+        avg_logits = weighted_sum  # already sums to 1
         
         # Argmax accuracy (hard-label quality)
         acc_list.append(np.mean(np.argmax(avg_logits, axis=1) == true_labels))
@@ -237,7 +250,7 @@ for gamma in gamma_values:
 # 5. DIAGNOSIS SUMMARY
 # ============================================================
 print("\n" + "=" * 70)
-print("DIAGNOSIS SUMMARY (Per-Device LDP + Soft-Label KL)")
+print("DIAGNOSIS SUMMARY (Per-Device LDP + BLUE Aggregation + Soft-Label KL)")
 print("=" * 70)
 
 if len(game_results) >= 2:
@@ -247,19 +260,22 @@ if len(game_results) >= 2:
     avg_eps_list = [game_results[g]['avg_eps'] for g in gammas_ok]
     per_dev_stds = [game_results[g]['per_device_std'] for g in gammas_ok]
     noise_stds = [game_results[g]['noise_std'] for g in gammas_ok]
+    noise_stds_blue = [game_results[g]['noise_std_blue'] for g in gammas_ok]
     pseudo_accs = [game_results[g]['pseudo_acc'] for g in gammas_ok]
     top5_accs = [game_results[g]['top5_acc'] for g in gammas_ok]
     kl_divs = [game_results[g]['kl_div'] for g in gammas_ok]
     
-    print(f"\nSignal propagation (γ={gammas_ok[0]} → γ={gammas_ok[-1]}):")
+    print(f"\nSignal propagation (γ={gammas_ok[0]} → γ={gammas_ok[-1]}), C={C}:")
     print(f"  Participation rate:    {part_rates[0]*100:.0f}% → {part_rates[-1]*100:.0f}%  "
           f"(spread: {(max(part_rates)-min(part_rates))*100:.0f}%)")
     print(f"  Average ε:             {avg_eps_list[0]:.3f} → {avg_eps_list[-1]:.3f}  "
           f"(spread: {max(avg_eps_list)-min(avg_eps_list):.3f})")
     print(f"  Per-device noise σ:    {per_dev_stds[0]:.4f} → {per_dev_stds[-1]:.4f}  "
           f"(ratio: {max(per_dev_stds)/max(min(per_dev_stds),1e-9):.2f}x)")
-    print(f"  Aggregated noise σ:    {noise_stds[0]:.4f} → {noise_stds[-1]:.4f}  "
-          f"(ratio: {max(noise_stds)/max(min(noise_stds),1e-9):.2f}x)")
+    print(f"  BLUE-aggregated σ:     {noise_stds_blue[0]:.4f} → {noise_stds_blue[-1]:.4f}  "
+          f"(ratio: {max(noise_stds_blue)/max(min(noise_stds_blue),1e-9):.2f}x)")
+    print(f"  BLUE SNR:              {game_results[gammas_ok[0]]['snr_blue']:.2f} → "
+          f"{game_results[gammas_ok[-1]]['snr_blue']:.2f}")
     print(f"  Argmax accuracy:       {pseudo_accs[0]*100:.1f}% → {pseudo_accs[-1]*100:.1f}%  "
           f"(spread: {(max(pseudo_accs)-min(pseudo_accs))*100:.1f}%)")
     print(f"  Top-5 accuracy:        {top5_accs[0]*100:.1f}% → {top5_accs[-1]*100:.1f}%  "
@@ -267,12 +283,9 @@ if len(game_results) >= 2:
     print(f"  KL divergence:         {kl_divs[0]:.3f} → {kl_divs[-1]:.3f}  "
           f"(ratio: {max(kl_divs)/max(min(kl_divs),1e-9):.2f}x)")
     
-    print(f"\n--- Key insight: Per-device LDP + Soft-label KL ---")
-    print(f"  Per-device noise ∝ 2C/ε, aggregated noise ∝ (2C/ε)/√N")
-    print(f"  Higher γ → more participants (N↑) but smaller ε (ε↓)")
-    print(f"  Net effect on noise: ε decrease dominates √N averaging")
-    print(f"  BUT: soft-label KL preserves distribution info even under noise")
-    print(f"  AND: more diverse ensemble (N models) provides richer knowledge")
-    print(f"  → Empirical result will determine optimal γ tradeoff")
+    print(f"\n--- Key changes from Fix 15 ---")
+    print(f"  C = {C} (was 5): sensitivity 2C = {2*C} (was 10) → noise reduced {5/C:.1f}×")
+    print(f"  BLUE weighting: w_i ∝ ε_i² → noisy marginal devices down-weighted")
+    print(f"  Combined effect: better SNR, wider quality spread across γ")
 
 print("\nDone.")

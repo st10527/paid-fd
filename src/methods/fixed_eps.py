@@ -49,7 +49,7 @@ class FixedEpsilonConfig:
     pretrain_lr: float = 0.1
 
     # Privacy
-    clip_bound: float = 5.0
+    clip_bound: float = 2.0      # Match PAID-FD C=2
 
     # Participation
     participation_rate: float = 1.0
