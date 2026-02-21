@@ -39,9 +39,10 @@ class FixedEpsilonConfig:
     local_lr: float = 0.01
     local_momentum: float = 0.9
 
-    # Distillation (soft-label KL, same pipeline as PAID-FD)
+    # Distillation (soft-label KL + GT regularization, same as PAID-FD)
     distill_epochs: int = 1
-    distill_lr: float = 0.001
+    distill_lr: float = 0.0001   # Low lr: prevent noisy overwrite
+    distill_alpha: float = 0.5   # α×KL(noisy) + (1-α)×CE(true)
     temperature: float = 3.0     # Soft-label T=3: match PAID-FD
 
     # Pre-training on public data
@@ -216,7 +217,9 @@ class FixedEpsilon(FederatedMethod):
             # Soft-label KL distillation (no EMA)
             T = self.config.temperature
             teacher_probs = F.softmax(noisy_logits_tensor / T, dim=1)
-            self._distill_to_server_kl(teacher_probs, public_images[:min_len])
+            self._distill_to_server_kl(
+                teacher_probs, public_images[:min_len], public_labels[:min_len]
+            )
 
         # Evaluate
         accuracy = 0.0
@@ -276,12 +279,15 @@ class FixedEpsilon(FederatedMethod):
     def _distill_to_server_kl(
         self,
         teacher_probs: torch.Tensor,
-        public_images: torch.Tensor
+        public_images: torch.Tensor,
+        public_labels: torch.Tensor = None
     ):
-        """Distill via KL divergence from soft teacher probabilities."""
+        """Distill via mixed loss: α×KL(noisy) + (1-α)×CE(true)."""
         self.server_model.train()
         optimizer = self.distill_optimizer
         T = self.config.temperature
+        alpha = self.config.distill_alpha
+        ce_criterion = nn.CrossEntropyLoss()
 
         augment = transforms.Compose([
             transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
@@ -298,14 +304,24 @@ class FixedEpsilon(FederatedMethod):
                 idx = perm[start:end]
 
                 data = augment(public_images[idx]).to(self.device)
-                target = teacher_probs[idx].to(self.device)
+                target_probs = teacher_probs[idx].to(self.device)
 
                 student_logits = self.server_model(data)
-                loss = F.kl_div(
+
+                # KL distillation from noisy teacher
+                loss_kl = F.kl_div(
                     F.log_softmax(student_logits / T, dim=1),
-                    target,
+                    target_probs,
                     reduction='batchmean'
                 ) * (T * T)
+
+                # Ground-truth CE regularization
+                if public_labels is not None and alpha < 1.0:
+                    true_labels = public_labels[idx].to(self.device)
+                    loss_ce = ce_criterion(student_logits, true_labels)
+                    loss = alpha * loss_kl + (1 - alpha) * loss_ce
+                else:
+                    loss = loss_kl
 
                 optimizer.zero_grad()
                 loss.backward()

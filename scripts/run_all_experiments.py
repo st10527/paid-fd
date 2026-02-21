@@ -371,7 +371,8 @@ def _create_method(method_name: str, model, config: dict, device: str):
             local_lr=local_lr,
             local_momentum=tc.get('local_momentum', 0.9),
             distill_epochs=1,       # 1 epoch/round (noisy targets change each round)
-            distill_lr=0.001,
+            distill_lr=0.0001,      # Low lr: prevent noisy overwrite
+            distill_alpha=mc.get('distill_alpha', 0.5),  # α×KL + (1-α)×CE
             temperature=3.0,        # Soft-label T=3: preserves dark knowledge under noise
             pretrain_epochs=10,     # 10 ep: ~35-40% start, FL has room
             clip_bound=mc.get('clip_bound', 2.0),   # C=2: reduced sensitivity
@@ -386,7 +387,8 @@ def _create_method(method_name: str, model, config: dict, device: str):
             local_epochs=local_epochs,
             local_lr=local_lr,
             distill_epochs=1,
-            distill_lr=0.001,
+            distill_lr=0.0001,      # Match PAID-FD
+            distill_alpha=0.5,      # α×KL + (1-α)×CE
             temperature=3.0,        # Soft-label T=3: match PAID-FD
             pretrain_epochs=10,     # Match PAID-FD
             clip_bound=2.0,              # Match PAID-FD C=2
@@ -464,7 +466,7 @@ def run_phase1_gamma(device: str, seeds: list, n_rounds: int, quick: bool = Fals
             config = {
                 'n_devices': 50, 'gamma': gamma, 'alpha': 0.5,
                 'local_epochs': 5, 'local_lr': 0.01, 'local_momentum': 0.9,
-                'distill_epochs': 1, 'distill_lr': 0.001, 'temperature': 1.0,
+                'distill_epochs': 1, 'distill_lr': 0.0001, 'temperature': 3.0,
                 'public_samples': 20000,
                 'synthetic': quick,
                 'heterogeneity': {

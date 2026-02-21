@@ -29,15 +29,16 @@ class PAIDFDConfig:
     """
     Configuration for PAID-FD.
     
-    Key design: persistent local models + soft-label KL distillation.
+    Key design: persistent local models + mixed-loss distillation.
     Each device keeps its own model across rounds and does local epochs
     per round. Over 100 rounds, this accumulates training.
     
-    Distillation uses soft-label KL divergence (not hard-label CE):
-    - Preserves full logit distribution information under DP noise
+    Distillation uses mixed loss: α×KL(noisy) + (1-α)×CE(true)
+    - KL soft-label preserves full logit distribution under DP noise
     - Temperature T=3.0 extracts dark knowledge (class similarities)
+    - CE(true) anchors model against noisy-target drift over 100 rounds
+    - Low distill_lr (0.0001) prevents each round from overwriting model
     - No EMA buffer needed (SGD naturally averages noise across rounds)
-    - Pure FL signal (no ground-truth regularisation)
     
     Pre-training is kept moderate (10 epochs) so that FL contribution
     matters — ensemble diversity (more participants) creates real signal
@@ -53,9 +54,10 @@ class PAIDFDConfig:
     local_lr: float = 0.01       # SGD fine-tuning lr (models start pre-trained)
     local_momentum: float = 0.9  # Standard SGD momentum
     
-    # Distillation (soft-label KL, same pipeline as FedMD but with noisy logits)
+    # Distillation (soft-label KL + ground-truth regularization)
     distill_epochs: int = 1      # 1 epoch/round (noisy targets change each round)
-    distill_lr: float = 0.001    # Adam lr for distillation
+    distill_lr: float = 0.0001   # Adam lr for distillation (low: prevent noisy overwrite)
+    distill_alpha: float = 0.5   # α×KL(noisy) + (1-α)×CE(true): GT anchors model
     temperature: float = 3.0     # Soft-label T=3: preserves dark knowledge under noise
     
     # Pre-training on public data (FedMD "transfer learning" phase)
@@ -317,8 +319,11 @@ class PAIDFD(FederatedMethod):
             T = self.config.temperature
             teacher_probs = F.softmax(noisy_logits_tensor / T, dim=1)
             
-            # 3c. Distill to server model via KL divergence
-            self._distill_to_server_kl(teacher_probs, public_images[:min_len])
+            # 3c. Distill to server model via mixed loss:
+            #     α × KL(student || noisy_teacher) + (1-α) × CE(student, true_label)
+            self._distill_to_server_kl(
+                teacher_probs, public_images[:min_len], public_labels[:min_len]
+            )
             
             # 3d. Privacy accounting
             for dev_id, eps in zip(participants, eps_list):
@@ -437,25 +442,29 @@ class PAIDFD(FederatedMethod):
     def _distill_to_server_kl(
         self,
         teacher_probs: torch.Tensor,
-        public_images: torch.Tensor
+        public_images: torch.Tensor,
+        public_labels: torch.Tensor = None
     ):
         """
-        Distill via KL divergence from soft teacher probabilities.
+        Distill via mixed loss: α×KL(noisy) + (1-α)×CE(true).
         
-        loss = KL(softmax(student_logits/T) || teacher_probs) * T²
+        The KL term transfers ensemble knowledge from noisy aggregated logits.
+        The CE term anchors the model to ground-truth labels, preventing
+        gradual accuracy degradation from 100 rounds of noisy-target fitting.
         
-        Identical to FedMD's distillation pipeline, but teacher_probs
-        are computed from DP-noisy aggregated logits instead of clean ones.
-        Soft labels preserve the full probability distribution (dark knowledge)
-        which is more robust to noise than hard-label argmax.
+        With α=0.5 and lr=0.0001, each round makes a small update that
+        balances FL signal with stability.
         
         Args:
             teacher_probs: Soft target probabilities from noisy logits (N, K)
             public_images: Corresponding public images (N, C, H, W)
+            public_labels: Ground-truth labels for public data (N,)
         """
         self.server_model.train()
         optimizer = self.distill_optimizer
         T = self.config.temperature
+        alpha = self.config.distill_alpha
+        ce_criterion = nn.CrossEntropyLoss()
         
         # Augmentation on normalised tensors (works for CIFAR 32×32)
         augment = transforms.Compose([
@@ -474,14 +483,24 @@ class PAIDFD(FederatedMethod):
                 idx = perm[start:end]
                 
                 data = augment(public_images[idx]).to(self.device)
-                target = teacher_probs[idx].to(self.device)
+                target_probs = teacher_probs[idx].to(self.device)
                 
                 student_logits = self.server_model(data)
-                loss = F.kl_div(
+                
+                # KL distillation from noisy teacher
+                loss_kl = F.kl_div(
                     F.log_softmax(student_logits / T, dim=1),
-                    target,
+                    target_probs,
                     reduction='batchmean'
                 ) * (T * T)
+                
+                # Ground-truth CE regularization
+                if public_labels is not None and alpha < 1.0:
+                    true_labels = public_labels[idx].to(self.device)
+                    loss_ce = ce_criterion(student_logits, true_labels)
+                    loss = alpha * loss_kl + (1 - alpha) * loss_ce
+                else:
+                    loss = loss_kl
                 
                 optimizer.zero_grad()
                 loss.backward()
