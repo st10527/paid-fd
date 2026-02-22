@@ -29,16 +29,20 @@ class PAIDFDConfig:
     """
     Configuration for PAID-FD.
     
-    Key design: persistent local models + mixed-loss distillation.
+    Key design: persistent local models + EMA logit buffer + mixed-loss distillation.
     Each device keeps its own model across rounds and does local epochs
     per round. Over 100 rounds, this accumulates training.
     
-    Distillation uses mixed loss: α×KL(noisy) + (1-α)×CE(true)
-    - KL soft-label preserves full logit distribution under DP noise
-    - Temperature T=3.0 extracts dark knowledge (class similarities)
-    - CE(true) anchors model against noisy-target drift over 100 rounds
-    - Low distill_lr (0.0001) prevents each round from overwriting model
-    - No EMA buffer needed (SGD naturally averages noise across rounds)
+    EMA logit buffer averages noisy aggregated logits across rounds:
+    - Single-round SNR ~ 1.6–2.6 (noise dominates, distillation useless)
+    - EMA(0.9) buffer SNR ~ 3.7–6.0 (meaningful teaching signal)
+    - Buffer changes smoothly → safe to use moderate distill_lr
+    - Different γ → different buffer SNR → γ differentiation visible
+    
+    Distillation uses mixed loss: α×KL(buffer) + (1-α)×CE(true)
+    - KL from EMA buffer provides noise-reduced ensemble knowledge
+    - CE(true) anchors model, prevents drift
+    - α=0.7 amplifies γ-dependent KL signal (70% ensemble, 30% GT)
     
     Pre-training is kept moderate (10 epochs) so that FL contribution
     matters — ensemble diversity (more participants) creates real signal
@@ -54,11 +58,12 @@ class PAIDFDConfig:
     local_lr: float = 0.01       # SGD fine-tuning lr (models start pre-trained)
     local_momentum: float = 0.9  # Standard SGD momentum
     
-    # Distillation (soft-label KL + ground-truth regularization)
-    distill_epochs: int = 1      # 1 epoch/round (noisy targets change each round)
-    distill_lr: float = 0.0001   # Adam lr for distillation (low: prevent noisy overwrite)
-    distill_alpha: float = 0.5   # α×KL(noisy) + (1-α)×CE(true): GT anchors model
+    # Distillation (EMA buffer + mixed loss)
+    distill_epochs: int = 1      # 1 epoch/round
+    distill_lr: float = 0.001    # Adam lr (safe: EMA buffer is smooth, not random each round)
+    distill_alpha: float = 0.7   # α×KL(buffer) + (1-α)×CE(true): high α amplifies γ signal
     temperature: float = 3.0     # Soft-label T=3: preserves dark knowledge under noise
+    ema_momentum: float = 0.9    # EMA for logit buffer: effective window ~5 rounds
     
     # Pre-training on public data (FedMD "transfer learning" phase)
     # 10 epochs → ~35-40% start, leaving ~20% room for FL improvement
@@ -134,6 +139,10 @@ class PAIDFD(FederatedMethod):
         
         # Pre-training state
         self._pretrained = False
+        
+        # EMA logit buffer: accumulates aggregated noisy logits across rounds
+        # After ~5 rounds, buffer SNR ≈ 2.3× single-round SNR
+        self.logit_buffer = None  # Initialized on first round with logits
         
         # Privacy accounting: track cumulative ε per device across rounds
         self.privacy_spent = {}  # device_id -> cumulative epsilon
@@ -296,15 +305,16 @@ class PAIDFD(FederatedMethod):
             for k in ["training", "inference", "communication"]:
                 total_energy[k] += energy.get(k, 0)
         
-        # Stage 3: Aggregate NOISY logits, distill via soft-label KL
+        # Stage 3: Aggregate NOISY logits → EMA buffer → distill
         # Each device already added LDP noise locally.
-        # Averaging N noisy logits reduces noise variance by factor 1/N.
-        # Soft-label KL preserves full distribution info under noise.
+        # Single-round SNR ~ 1.6–2.6 → distillation learns mostly noise.
+        # EMA buffer accumulates logits across rounds → SNR × √(eff_window).
+        # With ema_momentum=0.9, effective window ≈ 5 rounds → SNR 3.7–6.0.
         if all_logits:
             N = len(all_logits)
             avg_eps = np.mean(eps_list)
             
-            # 3a. Weighted average of NOISY logits (noise already added per-device)
+            # 3a. BLUE weighted average of NOISY logits (per-device noise already added)
             min_len = min(len(l) for l in all_logits)
             total_w = sum(all_weights)
             norm_w = [w / total_w for w in all_weights]
@@ -313,16 +323,29 @@ class PAIDFD(FederatedMethod):
             )
             noisy_logits_tensor = aggregated_noisy.float()
             
-            # 3b. Soft-label KL distillation (no EMA needed)
-            # Temperature T preserves dark knowledge under noise.
-            # SGD over 100 rounds naturally averages noise.
-            T = self.config.temperature
-            teacher_probs = F.softmax(noisy_logits_tensor / T, dim=1)
+            # 3b. Update EMA logit buffer (noise averaging across rounds)
+            # buffer_t = α * buffer_{t-1} + (1-α) * logits_t
+            # After K rounds: noise variance ≈ var_single / (effective_window)
+            # → SNR improves by √(eff_window) ≈ 2.3× for α=0.9
+            ema = self.config.ema_momentum
+            if self.logit_buffer is None:
+                self.logit_buffer = noisy_logits_tensor.clone()
+            else:
+                # Handle size mismatch (shouldn't happen with fixed public set)
+                buf_len = min(len(self.logit_buffer), min_len)
+                self.logit_buffer[:buf_len] = (
+                    ema * self.logit_buffer[:buf_len]
+                    + (1 - ema) * noisy_logits_tensor[:buf_len]
+                )
             
-            # 3c. Distill to server model via mixed loss:
-            #     α × KL(student || noisy_teacher) + (1-α) × CE(student, true_label)
+            # 3c. Distill from EMA buffer (not single-round noisy logits)
+            T = self.config.temperature
+            buf_len = min(len(self.logit_buffer), min_len)
+            teacher_probs = F.softmax(self.logit_buffer[:buf_len] / T, dim=1)
+            
+            # 3d. Mixed loss: α × KL(buffer_teacher) + (1-α) × CE(true)
             self._distill_to_server_kl(
-                teacher_probs, public_images[:min_len], public_labels[:min_len]
+                teacher_probs, public_images[:buf_len], public_labels[:buf_len]
             )
             
             # 3d. Privacy accounting

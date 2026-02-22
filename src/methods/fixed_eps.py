@@ -39,11 +39,12 @@ class FixedEpsilonConfig:
     local_lr: float = 0.01
     local_momentum: float = 0.9
 
-    # Distillation (soft-label KL + GT regularization, same as PAID-FD)
+    # Distillation (EMA buffer + mixed loss, same as PAID-FD)
     distill_epochs: int = 1
-    distill_lr: float = 0.0001   # Low lr: prevent noisy overwrite
-    distill_alpha: float = 0.5   # α×KL(noisy) + (1-α)×CE(true)
+    distill_lr: float = 0.001    # Safe with EMA buffer
+    distill_alpha: float = 0.7   # 70% KL + 30% CE
     temperature: float = 3.0     # Soft-label T=3: match PAID-FD
+    ema_momentum: float = 0.9    # EMA for logit buffer
 
     # Pre-training on public data
     pretrain_epochs: int = 10
@@ -99,6 +100,9 @@ class FixedEpsilon(FederatedMethod):
         
         # Pre-training state
         self._pretrained = False
+        
+        # EMA logit buffer
+        self.logit_buffer = None
 
     def run_round(
         self,
@@ -204,8 +208,7 @@ class FixedEpsilon(FederatedMethod):
             for k in ["training", "inference", "communication"]:
                 total_energy[k] += energy.get(k, 0)
 
-        # ── Aggregate NOISY logits (per-device LDP noise already added) ──
-        # Averaging N noisy logits reduces noise variance by 1/N.
+        # ── Aggregate NOISY logits → EMA buffer → distill ──
         if all_logits:
             N = len(all_logits)
             min_len = min(len(l) for l in all_logits)
@@ -214,11 +217,23 @@ class FixedEpsilon(FederatedMethod):
             aggregated_noisy = sum(l[:min_len] for l in all_logits) / N
             noisy_logits_tensor = aggregated_noisy.float()
 
-            # Soft-label KL distillation (no EMA)
+            # Update EMA logit buffer
+            ema = self.config.ema_momentum
+            if self.logit_buffer is None:
+                self.logit_buffer = noisy_logits_tensor.clone()
+            else:
+                buf_len = min(len(self.logit_buffer), min_len)
+                self.logit_buffer[:buf_len] = (
+                    ema * self.logit_buffer[:buf_len]
+                    + (1 - ema) * noisy_logits_tensor[:buf_len]
+                )
+
+            # Distill from EMA buffer
             T = self.config.temperature
-            teacher_probs = F.softmax(noisy_logits_tensor / T, dim=1)
+            buf_len = min(len(self.logit_buffer), min_len)
+            teacher_probs = F.softmax(self.logit_buffer[:buf_len] / T, dim=1)
             self._distill_to_server_kl(
-                teacher_probs, public_images[:min_len], public_labels[:min_len]
+                teacher_probs, public_images[:buf_len], public_labels[:buf_len]
             )
 
         # Evaluate
