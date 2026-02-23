@@ -428,3 +428,120 @@ Phase 1.1: Gamma Sensitivity Analysis
 ======================================================================
 🏁 All done! Total time: 22033s (367.2 min)
 ======================================================================
+🖥️  Device: cuda
+🎲 Seeds: [42]
+🔄 Rounds: 100
+
+======================================================================
+Phase 1.1: Gamma Sensitivity Analysis
+======================================================================
+
+--- Gamma = 3 ---
+  Seed 42:
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+🖥️  Device: cuda
+🎲 Seeds: [42]
+🔄 Rounds: 100
+
+======================================================================
+Phase 1.1: Gamma Sensitivity Analysis
+======================================================================
+
+--- Gamma = 3 ---
+  Seed 42:
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2485
+    Epoch 10/10: loss=1.7248
+  [Pre-training] Done. All local models will start from this checkpoint.
+    Round   0/100: acc=0.3589, loss=2.6716, part=0.38
+    Round  10/100: acc=0.5194, loss=2.0849, part=0.38
+    Round  20/100: acc=0.5707, loss=1.9130, part=0.38
+    Round  30/100: acc=0.5852, loss=1.8927, part=0.38
+    Round  40/100: acc=0.5901, loss=1.8914, part=0.38
+    Round  50/100: acc=0.5983, loss=1.8909, part=0.38
+    Round  60/100: acc=0.5969, loss=1.9030, part=0.38
+    Round  70/100: acc=0.6059, loss=1.8841, part=0.38
+    Round  80/100: acc=0.6009, loss=1.9185, part=0.38
+    Round  90/100: acc=0.6014, loss=1.9241, part=0.38
+    Round  99/100: acc=0.5999, loss=1.9280, part=0.38
+
+--- Gamma = 5 ---
+  Seed 42:
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2485
+    Epoch 10/10: loss=1.7248
+  [Pre-training] Done. All local models will start from this checkpoint.
+    Round   0/100: acc=0.3816, loss=2.5662, part=0.70
+    Round  10/100: acc=0.5150, loss=2.0726, part=0.70
+    Round  20/100: acc=0.5759, loss=1.8767, part=0.70
+    Round  30/100: acc=0.5890, loss=1.8739, part=0.70
+    Round  40/100: acc=0.5991, loss=1.8713, part=0.70
+    Round  50/100: acc=0.5894, loss=1.8999, part=0.70
+    Round  60/100: acc=0.6051, loss=1.8873, part=0.70
+    Round  70/100: acc=0.6048, loss=1.8996, part=0.70
+    Round  80/100: acc=0.6031, loss=1.9120, part=0.70
+    Round  90/100: acc=0.6121, loss=1.8990, part=0.70
+    Round  99/100: acc=0.6082, loss=1.9114, part=0.70
+
+--- Gamma = 7 ---
+  Seed 42:
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2485
+    Epoch 10/10: loss=1.7248
+  [Pre-training] Done. All local models will start from this checkpoint.
+    Round   0/100: acc=0.3790, loss=2.6170, part=0.86
+    Round  10/100: acc=0.5135, loss=2.1156, part=0.86
+    Round  20/100: acc=0.5657, loss=1.8808, part=0.86
+    Round  30/100: acc=0.5832, loss=1.8791, part=0.86
+    Round  40/100: acc=0.5901, loss=1.8894, part=0.86
+    Round  50/100: acc=0.6005, loss=1.8834, part=0.86
+    Round  60/100: acc=0.5968, loss=1.8945, part=0.86
+    Round  70/100: acc=0.5990, loss=1.9213, part=0.86
+    Round  80/100: acc=0.6012, loss=1.9020, part=0.86
+    Round  90/100: acc=0.6082, loss=1.8964, part=0.86
+    Round  99/100: acc=0.6107, loss=1.8931, part=0.86
+
+--- Gamma = 10 ---
+  Seed 42:
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2485
+    Epoch 10/10: loss=1.7248
+  [Pre-training] Done. All local models will start from this checkpoint.
+    Round   0/100: acc=0.3693, loss=2.6433, part=1.00
+    Round  10/100: acc=0.5096, loss=2.0910, part=1.00
+    Round  20/100: acc=0.5695, loss=1.9089, part=1.00
+    Round  30/100: acc=0.5903, loss=1.8449, part=1.00
+    Round  40/100: acc=0.5886, loss=1.8839, part=1.00
+    Round  50/100: acc=0.5995, loss=1.8757, part=1.00
+    Round  60/100: acc=0.5948, loss=1.9077, part=1.00
+    Round  70/100: acc=0.6029, loss=1.8797, part=1.00
+    Round  80/100: acc=0.6007, loss=1.9230, part=1.00
+    Round  90/100: acc=0.6037, loss=1.9110, part=1.00
+    Round  99/100: acc=0.6073, loss=1.8952, part=1.00
+  💾 Saved: /home/aelab-3/TMC_2026/paid-fd/results/experiments/phase1_gamma_seed42.json
+
+✅ Phase 1.1: Gamma Sensitivity completed in 21950s
+
+======================================================================
+🏁 All done! Total time: 21950s (365.8 min)
+======================================================================
