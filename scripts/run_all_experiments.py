@@ -448,15 +448,53 @@ def _create_method(method_name: str, model, config: dict, device: str):
 # Phase Runners
 # ============================================================================
 
+def _phase1_base_config(gamma, n_devices=50, lambda_mult=None, clip_bound=2.0,
+                         quick=False):
+    """Build the base config dict for all Phase 1 experiments.
+    
+    Shared training hyper-parameters (from Fix 17):
+    - local_epochs=5, local_lr=0.01, distill_lr=0.001
+    - EMA buffer (momentum=0.9), distill_alpha=0.7, T=3.0, C configurable
+    """
+    config = {
+        'n_devices': n_devices, 'gamma': gamma, 'alpha': 0.5,
+        'local_epochs': 5, 'local_lr': 0.01, 'local_momentum': 0.9,
+        'distill_epochs': 1, 'distill_lr': 0.001, 'temperature': 3.0,
+        'public_samples': 20000,
+        'synthetic': quick,
+        'heterogeneity': {
+            'config_file': 'config/devices/heterogeneity.yaml',
+        },
+        'method_config': {
+            'gamma': gamma, 'delta': 0.01,
+            'clip_bound': clip_bound,
+            'ema_momentum': 0.9,
+            'distill_alpha': 0.7,
+        }
+    }
+    if lambda_mult is not None:
+        config['heterogeneity']['overrides'] = {
+            'privacy_sensitivity': {'lambda_mult': lambda_mult}
+        }
+    return config
+
+
 def run_phase1_gamma(device: str, seeds: list, n_rounds: int, quick: bool = False):
-    """Phase 1.1: Gamma sensitivity analysis."""
+    """Phase 1.1: Gamma sensitivity analysis.
+    
+    γ ∈ {3, 5, 7, 10, 15}  (fixed: λ_mult=1.0, N=50, C=2)
+    
+    γ controls the server's valuation of quality — higher γ means the
+    server is willing to pay more, attracting more participants.
+    Key metrics: accuracy, participation rate, avg ε, communication cost.
+    """
     print("\n" + "=" * 70)
     print("Phase 1.1: Gamma Sensitivity Analysis")
     print("=" * 70)
     
-    gamma_values = [3, 5, 7, 10]
+    gamma_values = [3, 5, 7, 10, 15]
     if quick:
-        gamma_values = [3, 7]
+        gamma_values = [3, 10]
     
     results = {'phase': 'phase1_gamma', 'gamma_values': gamma_values, 'runs': {}}
     
@@ -465,17 +503,7 @@ def run_phase1_gamma(device: str, seeds: list, n_rounds: int, quick: bool = Fals
         runs = []
         for seed in seeds:
             print(f"  Seed {seed}:")
-            config = {
-                'n_devices': 50, 'gamma': gamma, 'alpha': 0.5,
-                'local_epochs': 5, 'local_lr': 0.01, 'local_momentum': 0.9,
-                'distill_epochs': 1, 'distill_lr': 0.001, 'temperature': 3.0,
-                'public_samples': 20000,
-                'synthetic': quick,
-                'heterogeneity': {
-                    'config_file': 'config/devices/heterogeneity.yaml',
-                },
-                'method_config': {'gamma': gamma, 'delta': 0.01}
-            }
+            config = _phase1_base_config(gamma, quick=quick)
             run = run_single_experiment('PAID-FD', config, seed, device, n_rounds)
             runs.append(run)
         results['runs'][str(gamma)] = runs
@@ -485,18 +513,23 @@ def run_phase1_gamma(device: str, seeds: list, n_rounds: int, quick: bool = Fals
 
 
 def run_phase1_lambda(device: str, seeds: list, n_rounds: int, quick: bool = False):
-    """Phase 1.2: Lambda sensitivity analysis."""
+    """Phase 1.2: Lambda sensitivity analysis.
+    
+    λ_mult ∈ {0.3, 0.5, 1.0, 2.0, 3.0}  (fixed: γ=best from 1.1, N=50, C=2)
+    
+    λ_mult scales all devices' privacy cost coefficients.
+    Higher λ → devices demand more compensation → fewer participants.
+    """
     print("\n" + "=" * 70)
     print("Phase 1.2: Lambda Sensitivity Analysis")
     print("=" * 70)
     
-    # Load best gamma from phase 1.1
     best_gamma = _get_best_gamma()
     print(f"  Using best γ = {best_gamma} from Phase 1.1")
     
-    lambda_values = [0.5, 1.0, 2.0, 5.0]
+    lambda_values = [0.3, 0.5, 1.0, 2.0, 3.0]
     if quick:
-        lambda_values = [1.0, 5.0]
+        lambda_values = [0.5, 2.0]
     
     results = {
         'phase': 'phase1_lambda', 'best_gamma': best_gamma,
@@ -508,24 +541,90 @@ def run_phase1_lambda(device: str, seeds: list, n_rounds: int, quick: bool = Fal
         runs = []
         for seed in seeds:
             print(f"  Seed {seed}:")
-            config = {
-                'n_devices': 50, 'gamma': best_gamma, 'alpha': 0.5,
-                'local_epochs': 3, 'local_lr': 0.01, 'local_momentum': 0.9,
-                'distill_epochs': 5, 'distill_lr': 0.001, 'temperature': 3.0,
-                'synthetic': quick,
-                'heterogeneity': {
-                    'config_file': 'config/devices/heterogeneity.yaml',
-                    'overrides': {
-                        'privacy_sensitivity': {'lambda_mult': lam}
-                    }
-                },
-                'method_config': {'gamma': best_gamma, 'delta': 0.01}
-            }
+            config = _phase1_base_config(best_gamma, lambda_mult=lam, quick=quick)
             run = run_single_experiment('PAID-FD', config, seed, device, n_rounds)
             runs.append(run)
         results['runs'][str(lam)] = runs
     
     save_phase_results(results, 'phase1_lambda', seeds)
+    return results
+
+
+def run_phase1_ndevices(device: str, seeds: list, n_rounds: int, quick: bool = False):
+    """Phase 1.3: Number of devices (N) sensitivity analysis.
+    
+    N ∈ {10, 20, 30, 40, 50}  (fixed: γ=best from 1.1, λ_mult=1.0, C=2)
+    
+    More devices → more potential participants → richer ensemble.
+    But also more non-IID data splits → harder local learning.
+    """
+    print("\n" + "=" * 70)
+    print("Phase 1.3: N (Number of Devices) Sensitivity Analysis")
+    print("=" * 70)
+    
+    best_gamma = _get_best_gamma()
+    print(f"  Using best γ = {best_gamma} from Phase 1.1")
+    
+    n_values = [10, 20, 30, 40, 50]
+    if quick:
+        n_values = [10, 50]
+    
+    results = {
+        'phase': 'phase1_ndevices', 'best_gamma': best_gamma,
+        'n_values': n_values, 'runs': {}
+    }
+    
+    for n in n_values:
+        print(f"\n--- N = {n} devices ---")
+        runs = []
+        for seed in seeds:
+            print(f"  Seed {seed}:")
+            config = _phase1_base_config(best_gamma, n_devices=n, quick=quick)
+            run = run_single_experiment('PAID-FD', config, seed, device, n_rounds)
+            runs.append(run)
+        results['runs'][str(n)] = runs
+    
+    save_phase_results(results, 'phase1_ndevices', seeds)
+    return results
+
+
+def run_phase1_clipbound(device: str, seeds: list, n_rounds: int, quick: bool = False):
+    """Phase 1.4: Clip bound (C) sensitivity analysis.
+    
+    C ∈ {1, 2, 3, 4, 5}  (fixed: γ=best from 1.1, λ_mult=1.0, N=50)
+    
+    C controls the logit clipping range [-C, C]:
+    - Lower C → smaller sensitivity (2C) → less noise per ε
+    - But also clips informative logits → signal loss
+    - Sweet spot balances noise reduction vs information preservation
+    """
+    print("\n" + "=" * 70)
+    print("Phase 1.4: Clip Bound (C) Sensitivity Analysis")
+    print("=" * 70)
+    
+    best_gamma = _get_best_gamma()
+    print(f"  Using best γ = {best_gamma} from Phase 1.1")
+    
+    c_values = [1, 2, 3, 4, 5]
+    if quick:
+        c_values = [1, 5]
+    
+    results = {
+        'phase': 'phase1_clipbound', 'best_gamma': best_gamma,
+        'c_values': c_values, 'runs': {}
+    }
+    
+    for c in c_values:
+        print(f"\n--- Clip bound C = {c} ---")
+        runs = []
+        for seed in seeds:
+            print(f"  Seed {seed}:")
+            config = _phase1_base_config(best_gamma, clip_bound=float(c), quick=quick)
+            run = run_single_experiment('PAID-FD', config, seed, device, n_rounds)
+            runs.append(run)
+        results['runs'][str(c)] = runs
+    
+    save_phase_results(results, 'phase1_clipbound', seeds)
     return results
 
 
@@ -924,6 +1023,8 @@ def _get_best_lambda(default: float = 0.1) -> float:
 PHASES = {
     '1.1': ('Phase 1.1: Gamma Sensitivity', run_phase1_gamma),
     '1.2': ('Phase 1.2: Lambda Sensitivity', run_phase1_lambda),
+    '1.3': ('Phase 1.3: N (Device Count) Sensitivity', run_phase1_ndevices),
+    '1.4': ('Phase 1.4: Clip Bound (C) Sensitivity', run_phase1_clipbound),
     '2':   ('Phase 2: Convergence & Performance', run_phase2),
     '3':   ('Phase 3: Privacy-Accuracy Tradeoff', run_phase3),
     '4':   ('Phase 4: Incentive Mechanism', run_phase4),
@@ -932,11 +1033,13 @@ PHASES = {
     '7':   ('Phase 7: Ablation Study', run_phase7),
 }
 
-PHASE_ORDER = ['1.1', '1.2', '2', '3', '4', '5', '6', '7']
+PHASE_ORDER = ['1.1', '1.2', '1.3', '1.4', '2', '3', '4', '5', '6', '7']
 
 PHASE_RESULT_FILES = {
     '1.1': 'phase1_gamma',
     '1.2': 'phase1_lambda',
+    '1.3': 'phase1_ndevices',
+    '1.4': 'phase1_clipbound',
     '2':   'phase2_convergence',
     '3':   'phase3_privacy',
     '4':   'phase4_incentive',
