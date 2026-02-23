@@ -973,10 +973,25 @@ def run_phase7(device: str, seeds: list, n_rounds: int, quick: bool = False):
 # Helper: Get best gamma from Phase 1.1 results
 # ============================================================================
 
+def _find_phase_result(phase: str) -> str:
+    """Find result file: try combined first, then fall back to per-seed files."""
+    combined = result_path(phase)
+    if Path(combined).exists():
+        return combined
+    # Fall back to per-seed files
+    import glob
+    pattern = str(PROJECT_ROOT / "results" / "experiments" / f"{phase}_seed*.json")
+    seed_files = sorted(glob.glob(pattern))
+    if seed_files:
+        print(f"  ℹ️  Using per-seed file: {Path(seed_files[0]).name}")
+        return seed_files[0]
+    return None
+
+
 def _get_best_gamma(default: float = 10.0) -> float:
     """Load best gamma from phase 1.1 results, or return default."""
-    path = result_path('phase1_gamma')
-    if not Path(path).exists():
+    path = _find_phase_result('phase1_gamma')
+    if path is None:
         print(f"  ⚠️  Phase 1.1 results not found. Using default γ={default}")
         return default
     
@@ -998,8 +1013,8 @@ def _get_best_gamma(default: float = 10.0) -> float:
 
 def _get_best_lambda(default: float = 0.1) -> float:
     """Load best lambda from phase 1.2 results, or return default."""
-    path = result_path('phase1_lambda')
-    if not Path(path).exists():
+    path = _find_phase_result('phase1_lambda')
+    if path is None:
         return default
     
     data = load_json(path)
