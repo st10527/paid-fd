@@ -45,13 +45,10 @@ EXP1_METHODS = {
     },
     "FedMD": {},
     "FedGMKD": {
-        "alpha": 0.1, "beta": 1.0, "tau": 0.5,
-        "participation_rate": 0.5,
+        "alpha": 0.5, "beta": 0.5, "dat_temperature": 1.0,
     },
     "CSRA": {
-        "budget": 100.0,
-        "epsilon_menu": [0.5, 1.0, 2.0, 5.0, 10.0],
-        "participation_rate": 0.5,
+        "budget_per_round": 50.0,
     },
 }
 

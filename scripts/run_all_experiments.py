@@ -426,10 +426,9 @@ def _create_method(method_name: str, model, config: dict, device: str):
     
     elif method_name == 'FedGMKD':
         cfg = FedGMKDConfig(
-            alpha=mc.get('alpha', 0.1),
-            beta=mc.get('beta', 1.0),
-            tau=mc.get('tau', 0.5),
-            participation_rate=mc.get('participation_rate', 0.5),
+            alpha=mc.get('alpha', 0.5),
+            beta=mc.get('beta', 0.5),
+            dat_temperature=mc.get('dat_temperature', 1.0),
             local_epochs=mc.get('local_epochs', 5),
             local_lr=mc.get('local_lr', 0.01),
         )
@@ -437,9 +436,7 @@ def _create_method(method_name: str, model, config: dict, device: str):
     
     elif method_name == 'CSRA':
         cfg = CSRAConfig(
-            budget=mc.get('budget', 100.0),
-            epsilon_menu=mc.get('epsilon_menu', [0.5, 1.0, 2.0, 5.0, 10.0]),
-            participation_rate=mc.get('participation_rate', 0.5),
+            budget_per_round=mc.get('budget_per_round', 50.0),
             local_epochs=mc.get('local_epochs', 5),
             local_lr=mc.get('local_lr', 0.01),
         )
