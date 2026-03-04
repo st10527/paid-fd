@@ -76,6 +76,14 @@ class PAIDFDConfig:
     
     # Public data
     public_samples: int = 20000  # 200/class for better pre-training & logit diversity
+    
+    # ── Ablation flags (Experiment 6) ──
+    # Each flag disables one component to measure its contribution.
+    # Default: all True = full PAID-FD pipeline (Fix 17).
+    use_blue: bool = True        # BLUE (ε²-weighted) aggregation; False → equal weights
+    use_ema: bool = True         # EMA logit buffer across rounds; False → single-round logits
+    use_mixed_loss: bool = True  # Mixed loss α×KL + (1-α)×CE; False → pure KL (α=1.0)
+    use_ldp: bool = True         # Per-device LDP noise; False → clean logits (no privacy)
 
 
 class PAIDFD(FederatedMethod):
@@ -280,18 +288,26 @@ class PAIDFD(FederatedMethod):
             # When server averages N noisy logits, noise var ~ 1/N.
             # → More participants = less noise = better accuracy.
             device_eps = decision.eps_star
-            device_sensitivity = 2.0 * C  # Per-device sensitivity
-            device_noise_scale = device_sensitivity / device_eps
-            device_noise = np.random.laplace(
-                0, device_noise_scale, device_logits.shape
-            ).astype(np.float32)
-            noisy_device_logits = device_logits + torch.from_numpy(device_noise)
+            if self.config.use_ldp:
+                device_sensitivity = 2.0 * C  # Per-device sensitivity
+                device_noise_scale = device_sensitivity / device_eps
+                device_noise = np.random.laplace(
+                    0, device_noise_scale, device_logits.shape
+                ).astype(np.float32)
+                noisy_device_logits = device_logits + torch.from_numpy(device_noise)
+            else:
+                # Ablation: no LDP noise (clean logits)
+                noisy_device_logits = device_logits
             
             all_logits.append(noisy_device_logits)
             # BLUE (Best Linear Unbiased Estimator): w_i ∝ ε_i²
             # Var[noise_i] = 2(2C/ε_i)² ∝ 1/ε_i², so inverse-variance weight ∝ ε_i²
             # This down-weights high-noise (low-ε) devices optimally.
-            all_weights.append(decision.eps_star ** 2)
+            if self.config.use_blue:
+                all_weights.append(decision.eps_star ** 2)
+            else:
+                # Ablation: equal weights (simple average)
+                all_weights.append(1.0)
             eps_list.append(decision.eps_star)
             
             # Energy accounting
@@ -327,26 +343,38 @@ class PAIDFD(FederatedMethod):
             # buffer_t = α * buffer_{t-1} + (1-α) * logits_t
             # After K rounds: noise variance ≈ var_single / (effective_window)
             # → SNR improves by √(eff_window) ≈ 2.3× for α=0.9
-            ema = self.config.ema_momentum
-            if self.logit_buffer is None:
-                self.logit_buffer = noisy_logits_tensor.clone()
+            if self.config.use_ema:
+                ema = self.config.ema_momentum
+                if self.logit_buffer is None:
+                    self.logit_buffer = noisy_logits_tensor.clone()
+                else:
+                    # Handle size mismatch (shouldn't happen with fixed public set)
+                    buf_len = min(len(self.logit_buffer), min_len)
+                    self.logit_buffer[:buf_len] = (
+                        ema * self.logit_buffer[:buf_len]
+                        + (1 - ema) * noisy_logits_tensor[:buf_len]
+                    )
+                distill_source = self.logit_buffer
             else:
-                # Handle size mismatch (shouldn't happen with fixed public set)
-                buf_len = min(len(self.logit_buffer), min_len)
-                self.logit_buffer[:buf_len] = (
-                    ema * self.logit_buffer[:buf_len]
-                    + (1 - ema) * noisy_logits_tensor[:buf_len]
-                )
+                # Ablation: use single-round aggregated logits directly
+                distill_source = noisy_logits_tensor
             
-            # 3c. Distill from EMA buffer (not single-round noisy logits)
+            # 3c. Distill from EMA buffer (or single-round logits if no EMA)
             T = self.config.temperature
-            buf_len = min(len(self.logit_buffer), min_len)
-            teacher_probs = F.softmax(self.logit_buffer[:buf_len] / T, dim=1)
+            buf_len = min(len(distill_source), min_len)
+            teacher_probs = F.softmax(distill_source[:buf_len] / T, dim=1)
             
             # 3d. Mixed loss: α × KL(buffer_teacher) + (1-α) × CE(true)
-            self._distill_to_server_kl(
-                teacher_probs, public_images[:buf_len], public_labels[:buf_len]
-            )
+            # Ablation: use_mixed_loss=False → pure KL (α=1.0)
+            if self.config.use_mixed_loss:
+                self._distill_to_server_kl(
+                    teacher_probs, public_images[:buf_len], public_labels[:buf_len]
+                )
+            else:
+                # Pure KL — no CE anchor
+                self._distill_to_server_kl(
+                    teacher_probs, public_images[:buf_len], public_labels=None
+                )
             
             # 3d. Privacy accounting
             for dev_id, eps in zip(participants, eps_list):

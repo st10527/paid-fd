@@ -378,6 +378,11 @@ def _create_method(method_name: str, model, config: dict, device: str):
             pretrain_epochs=10,     # 10 ep: ~35-40% start, FL has room
             clip_bound=mc.get('clip_bound', 2.0),   # C=2: reduced sensitivity
             public_samples=mc.get('public_samples_per_round', 1000),
+            # Ablation flags (Exp 6) — default True = full pipeline
+            use_blue=mc.get('use_blue', True),
+            use_ema=mc.get('use_ema', True),
+            use_mixed_loss=mc.get('use_mixed_loss', True),
+            use_ldp=mc.get('use_ldp', True),
         )
         return PAIDFD(m, cfg, 100, device)
     
