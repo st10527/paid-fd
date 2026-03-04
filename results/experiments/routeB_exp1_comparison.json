@@ -1,0 +1,821 @@
+{
+  "experiment": "exp1_method_comparison",
+  "seeds": [
+    42
+  ],
+  "runs": {
+    "PAID-FD": [
+      {
+        "method": "PAID-FD",
+        "seed": 42,
+        "n_rounds": 3,
+        "accuracies": [
+          0.3718,
+          0.392,
+          0.4297
+        ],
+        "losses": [
+          2.6485826377868653,
+          2.5295130279541014,
+          2.4040941928863524
+        ],
+        "participation_rates": [
+          0.7,
+          0.7,
+          0.7
+        ],
+        "prices": [
+          3.15597976138531,
+          3.15597976138531,
+          3.15597976138531
+        ],
+        "avg_eps": [
+          0.5237905970982143,
+          0.5237905970982143,
+          0.5237905970982143
+        ],
+        "avg_s": [
+          11.05587307825568,
+          11.05587307825568,
+          11.05587307825568
+        ],
+        "energy_history": [
+          {
+            "training": 2.9738040000000003,
+            "inference": 0.009778,
+            "communication": 34699.283747227215
+          },
+          {
+            "training": 2.9738040000000003,
+            "inference": 0.009778,
+            "communication": 34699.283747227215
+          },
+          {
+            "training": 2.9738040000000003,
+            "inference": 0.009778,
+            "communication": 34699.283747227215
+          }
+        ],
+        "extras": [
+          {
+            "price": 3.15597976138531,
+            "avg_s": 11.05587307825568,
+            "avg_eps": 0.5237905970982143,
+            "server_utility": 98.18519745354722,
+            "total_quality": 53.24518429760201,
+            "max_privacy_spent": 0.6418735351562499,
+            "avg_privacy_spent": 0.5237905970982143
+          },
+          {
+            "price": 3.15597976138531,
+            "avg_s": 11.05587307825568,
+            "avg_eps": 0.5237905970982143,
+            "server_utility": 98.18519745354722,
+            "total_quality": 53.24518429760201,
+            "max_privacy_spent": 1.2837470703124998,
+            "avg_privacy_spent": 1.0475811941964286
+          },
+          {
+            "price": 3.15597976138531,
+            "avg_s": 11.05587307825568,
+            "avg_eps": 0.5237905970982143,
+            "server_utility": 98.18519745354722,
+            "total_quality": 53.24518429760201,
+            "max_privacy_spent": 1.9256206054687497,
+            "avg_privacy_spent": 1.5713717912946428
+          }
+        ],
+        "final_accuracy": 0.4297,
+        "best_accuracy": 0.4297,
+        "elapsed_sec": 184.10706448554993,
+        "config": {
+          "n_devices": 50,
+          "gamma": 5.0,
+          "alpha": 0.5,
+          "model": "resnet18",
+          "local_epochs": 5,
+          "local_lr": 0.01,
+          "local_momentum": 0.9,
+          "distill_epochs": 1,
+          "distill_lr": 0.001,
+          "temperature": 3.0,
+          "public_samples": 20000,
+          "synthetic": false,
+          "method_config": {
+            "gamma": 5.0,
+            "delta": 0.01,
+            "clip_bound": 2.0,
+            "ema_momentum": 0.9,
+            "distill_alpha": 0.7
+          }
+        }
+      }
+    ],
+    "Fixed-eps-0.5": [
+      {
+        "method": "Fixed-eps-0.5",
+        "seed": 42,
+        "n_rounds": 3,
+        "accuracies": [
+          0.368,
+          0.3943,
+          0.4142
+        ],
+        "losses": [
+          2.6263800552368166,
+          2.5433007217407226,
+          2.482162370300293
+        ],
+        "participation_rates": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "prices": [
+          0,
+          0,
+          0
+        ],
+        "avg_eps": [
+          0,
+          0,
+          0
+        ],
+        "avg_s": [
+          0,
+          0,
+          0
+        ],
+        "energy_history": [
+          {
+            "training": 4.3019240000000005,
+            "inference": 1.4429999999999994,
+            "communication": 5144075.413812255
+          },
+          {
+            "training": 4.3019240000000005,
+            "inference": 1.4429999999999994,
+            "communication": 5144075.413812255
+          },
+          {
+            "training": 4.3019240000000005,
+            "inference": 1.4429999999999994,
+            "communication": 5144075.413812255
+          }
+        ],
+        "extras": [
+          {
+            "method": "Fixed-eps-0.5",
+            "fixed_epsilon": 0.5
+          },
+          {
+            "method": "Fixed-eps-0.5",
+            "fixed_epsilon": 0.5
+          },
+          {
+            "method": "Fixed-eps-0.5",
+            "fixed_epsilon": 0.5
+          }
+        ],
+        "final_accuracy": 0.4142,
+        "best_accuracy": 0.4142,
+        "elapsed_sec": 242.26516032218933,
+        "config": {
+          "n_devices": 50,
+          "gamma": 5.0,
+          "alpha": 0.5,
+          "model": "resnet18",
+          "local_epochs": 5,
+          "local_lr": 0.01,
+          "local_momentum": 0.9,
+          "distill_epochs": 1,
+          "distill_lr": 0.001,
+          "temperature": 3.0,
+          "public_samples": 20000,
+          "synthetic": false,
+          "method_config": {
+            "participation_rate": 1.0,
+            "samples_per_device": 100
+          }
+        }
+      }
+    ],
+    "Fixed-eps-1.0": [
+      {
+        "method": "Fixed-eps-1.0",
+        "seed": 42,
+        "n_rounds": 3,
+        "accuracies": [
+          0.3751,
+          0.3928,
+          0.412
+        ],
+        "losses": [
+          2.5935796325683595,
+          2.5383759243011474,
+          2.4881951736450194
+        ],
+        "participation_rates": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "prices": [
+          0,
+          0,
+          0
+        ],
+        "avg_eps": [
+          0,
+          0,
+          0
+        ],
+        "avg_s": [
+          0,
+          0,
+          0
+        ],
+        "energy_history": [
+          {
+            "training": 4.3019240000000005,
+            "inference": 1.4429999999999994,
+            "communication": 5144075.413812255
+          },
+          {
+            "training": 4.3019240000000005,
+            "inference": 1.4429999999999994,
+            "communication": 5144075.413812255
+          },
+          {
+            "training": 4.3019240000000005,
+            "inference": 1.4429999999999994,
+            "communication": 5144075.413812255
+          }
+        ],
+        "extras": [
+          {
+            "method": "Fixed-eps-1.0",
+            "fixed_epsilon": 1.0
+          },
+          {
+            "method": "Fixed-eps-1.0",
+            "fixed_epsilon": 1.0
+          },
+          {
+            "method": "Fixed-eps-1.0",
+            "fixed_epsilon": 1.0
+          }
+        ],
+        "final_accuracy": 0.412,
+        "best_accuracy": 0.412,
+        "elapsed_sec": 243.79563403129578,
+        "config": {
+          "n_devices": 50,
+          "gamma": 5.0,
+          "alpha": 0.5,
+          "model": "resnet18",
+          "local_epochs": 5,
+          "local_lr": 0.01,
+          "local_momentum": 0.9,
+          "distill_epochs": 1,
+          "distill_lr": 0.001,
+          "temperature": 3.0,
+          "public_samples": 20000,
+          "synthetic": false,
+          "method_config": {
+            "participation_rate": 1.0,
+            "samples_per_device": 100
+          }
+        }
+      }
+    ],
+    "FedAvg": [
+      {
+        "method": "FedAvg",
+        "seed": 42,
+        "n_rounds": 3,
+        "accuracies": [
+          0.0225,
+          0.0541,
+          0.0707
+        ],
+        "losses": [
+          4.563749530792236,
+          4.315825077056885,
+          4.108524989318847
+        ],
+        "participation_rates": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "prices": [
+          0,
+          0,
+          0
+        ],
+        "avg_eps": [
+          0,
+          0,
+          0
+        ],
+        "avg_s": [
+          0,
+          0,
+          0
+        ],
+        "energy_history": [
+          {
+            "training": 2.0545850000000003,
+            "inference": 0.0,
+            "communication": 5697528.339438848
+          },
+          {
+            "training": 2.156976,
+            "inference": 0.0,
+            "communication": 7569461.337658479
+          },
+          {
+            "training": 2.162465,
+            "inference": 0.0,
+            "communication": 6010210.52804957
+          }
+        ],
+        "extras": [
+          {
+            "method": "FedAvg",
+            "local_epochs": 5,
+            "comm_bytes": 1100000000
+          },
+          {
+            "method": "FedAvg",
+            "local_epochs": 5,
+            "comm_bytes": 1100000000
+          },
+          {
+            "method": "FedAvg",
+            "local_epochs": 5,
+            "comm_bytes": 1100000000
+          }
+        ],
+        "final_accuracy": 0.0707,
+        "best_accuracy": 0.0707,
+        "elapsed_sec": 92.81153678894043,
+        "config": {
+          "n_devices": 50,
+          "gamma": 5.0,
+          "alpha": 0.5,
+          "model": "resnet18",
+          "local_epochs": 5,
+          "local_lr": 0.01,
+          "local_momentum": 0.9,
+          "distill_epochs": 1,
+          "distill_lr": 0.001,
+          "temperature": 3.0,
+          "public_samples": 20000,
+          "synthetic": false,
+          "method_config": {
+            "local_epochs": 5,
+            "local_lr": 0.01,
+            "participation_rate": 0.5
+          }
+        }
+      }
+    ],
+    "FedMD": [
+      {
+        "method": "FedMD",
+        "seed": 42,
+        "n_rounds": 3,
+        "accuracies": [
+          0.3637,
+          0.3518,
+          0.3738
+        ],
+        "losses": [
+          2.4920069175720214,
+          2.568509086227417,
+          2.517296450805664
+        ],
+        "participation_rates": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "prices": [
+          0,
+          0,
+          0
+        ],
+        "avg_eps": [
+          0,
+          0,
+          0
+        ],
+        "avg_s": [
+          0,
+          0,
+          0
+        ],
+        "energy_history": [
+          {
+            "training": 4.3019240000000005,
+            "inference": 1.4429999999999994,
+            "communication": 5144075.413812255
+          },
+          {
+            "training": 4.3019240000000005,
+            "inference": 1.4429999999999994,
+            "communication": 5144075.413812255
+          },
+          {
+            "training": 4.3019240000000005,
+            "inference": 1.4429999999999994,
+            "communication": 5144075.413812255
+          }
+        ],
+        "extras": [
+          {
+            "method": "FedMD",
+            "n_public": 20000,
+            "epsilon": Infinity
+          },
+          {
+            "method": "FedMD",
+            "n_public": 20000,
+            "epsilon": Infinity
+          },
+          {
+            "method": "FedMD",
+            "n_public": 20000,
+            "epsilon": Infinity
+          }
+        ],
+        "final_accuracy": 0.3738,
+        "best_accuracy": 0.3738,
+        "elapsed_sec": 239.29527640342712,
+        "config": {
+          "n_devices": 50,
+          "gamma": 5.0,
+          "alpha": 0.5,
+          "model": "resnet18",
+          "local_epochs": 5,
+          "local_lr": 0.01,
+          "local_momentum": 0.9,
+          "distill_epochs": 1,
+          "distill_lr": 0.001,
+          "temperature": 3.0,
+          "public_samples": 20000,
+          "synthetic": false,
+          "method_config": {}
+        }
+      }
+    ],
+    "FedGMKD": [
+      {
+        "method": "FedGMKD",
+        "seed": 42,
+        "n_rounds": 3,
+        "accuracies": [
+          0.0231,
+          0.0602,
+          0.0861
+        ],
+        "losses": [
+          4.554533809661865,
+          4.323579769134522,
+          4.137319841003418
+        ],
+        "participation_rates": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "prices": [
+          0,
+          0,
+          0
+        ],
+        "avg_eps": [
+          0,
+          0,
+          0
+        ],
+        "avg_s": [
+          0,
+          0,
+          0
+        ],
+        "energy_history": [
+          {
+            "training": 4.3019240000000005,
+            "inference": 0.04301924000000001,
+            "communication": 15750633.736409739
+          },
+          {
+            "training": 4.3019240000000005,
+            "inference": 0.04301924000000001,
+            "communication": 15750633.736409739
+          },
+          {
+            "training": 4.3019240000000005,
+            "inference": 0.04301924000000001,
+            "communication": 15750633.736409739
+          }
+        ],
+        "extras": [
+          {
+            "method": "FedGMKD",
+            "n_prototypes": 100,
+            "avg_discrepancy": 0.0,
+            "dat_weights": [
+              0.0199,
+              0.0196,
+              0.0219,
+              0.0243,
+              0.0209,
+              0.0217,
+              0.0196,
+              0.0243,
+              0.0232,
+              0.0232,
+              0.025,
+              0.0186,
+              0.017,
+              0.0212,
+              0.0162,
+              0.0251,
+              0.0247,
+              0.0186,
+              0.0242,
+              0.0206,
+              0.019,
+              0.0245,
+              0.0155,
+              0.0232,
+              0.0244,
+              0.0204,
+              0.0178,
+              0.0214,
+              0.0189,
+              0.0121,
+              0.0208,
+              0.0149,
+              0.019,
+              0.0207,
+              0.0208,
+              0.0197,
+              0.014,
+              0.0188,
+              0.0165,
+              0.0201,
+              0.0171,
+              0.0186,
+              0.0199,
+              0.0224,
+              0.0175,
+              0.022,
+              0.0185,
+              0.0161,
+              0.0169,
+              0.0184
+            ]
+          },
+          {
+            "method": "FedGMKD",
+            "n_prototypes": 100,
+            "avg_discrepancy": 0.06724556522574404,
+            "dat_weights": [
+              0.0205,
+              0.0199,
+              0.0225,
+              0.0251,
+              0.0213,
+              0.0216,
+              0.0201,
+              0.025,
+              0.0239,
+              0.0238,
+              0.0256,
+              0.0189,
+              0.0173,
+              0.0217,
+              0.0165,
+              0.0256,
+              0.0255,
+              0.0189,
+              0.0247,
+              0.0211,
+              0.0195,
+              0.025,
+              0.0157,
+              0.0238,
+              0.0249,
+              0.0209,
+              0.0181,
+              0.0097,
+              0.0193,
+              0.0121,
+              0.0211,
+              0.0151,
+              0.0194,
+              0.021,
+              0.0213,
+              0.02,
+              0.0141,
+              0.0192,
+              0.0167,
+              0.0205,
+              0.0103,
+              0.019,
+              0.0203,
+              0.0229,
+              0.0173,
+              0.0225,
+              0.0185,
+              0.0163,
+              0.017,
+              0.0189
+            ]
+          },
+          {
+            "method": "FedGMKD",
+            "n_prototypes": 100,
+            "avg_discrepancy": 0.06948621971918482,
+            "dat_weights": [
+              0.0205,
+              0.0202,
+              0.0225,
+              0.0252,
+              0.0214,
+              0.0219,
+              0.0201,
+              0.025,
+              0.0239,
+              0.0238,
+              0.0257,
+              0.0191,
+              0.0173,
+              0.0218,
+              0.0166,
+              0.0257,
+              0.0253,
+              0.0191,
+              0.0248,
+              0.0211,
+              0.0196,
+              0.0252,
+              0.0157,
+              0.0238,
+              0.025,
+              0.021,
+              0.0183,
+              0.0062,
+              0.0194,
+              0.0121,
+              0.0212,
+              0.0151,
+              0.0195,
+              0.0212,
+              0.0214,
+              0.02,
+              0.0142,
+              0.0192,
+              0.0167,
+              0.0206,
+              0.0108,
+              0.0191,
+              0.0203,
+              0.0231,
+              0.0175,
+              0.0219,
+              0.0188,
+              0.0164,
+              0.0171,
+              0.0189
+            ]
+          }
+        ],
+        "final_accuracy": 0.0861,
+        "best_accuracy": 0.0861,
+        "elapsed_sec": 271.7635533809662,
+        "config": {
+          "n_devices": 50,
+          "gamma": 5.0,
+          "alpha": 0.5,
+          "model": "resnet18",
+          "local_epochs": 5,
+          "local_lr": 0.01,
+          "local_momentum": 0.9,
+          "distill_epochs": 1,
+          "distill_lr": 0.001,
+          "temperature": 3.0,
+          "public_samples": 20000,
+          "synthetic": false,
+          "method_config": {
+            "alpha": 0.5,
+            "beta": 0.5,
+            "dat_temperature": 1.0
+          }
+        }
+      }
+    ],
+    "CSRA": [
+      {
+        "method": "CSRA",
+        "seed": 42,
+        "n_rounds": 3,
+        "accuracies": [
+          0.01,
+          0.01,
+          0.01
+        ],
+        "losses": [
+          NaN,
+          NaN,
+          NaN
+        ],
+        "participation_rates": [
+          0.32,
+          0.34,
+          0.34
+        ],
+        "prices": [
+          0,
+          0,
+          0
+        ],
+        "avg_eps": [
+          0,
+          0,
+          0
+        ],
+        "avg_s": [
+          0,
+          0,
+          0
+        ],
+        "energy_history": [
+          {
+            "training": 1.398029,
+            "inference": 0.0,
+            "communication": 5710375.414506608
+          },
+          {
+            "training": 1.7662720000000003,
+            "inference": 0.0,
+            "communication": 5354955.209298855
+          },
+          {
+            "training": 1.576452,
+            "inference": 0.0,
+            "communication": 8095590.33648519
+          }
+        ],
+        "extras": [
+          {
+            "method": "CSRA",
+            "n_selected": 16,
+            "avg_epsilon": 1.0,
+            "total_reward": 47.14307538008147,
+            "budget": 50.0
+          },
+          {
+            "method": "CSRA",
+            "n_selected": 17,
+            "avg_epsilon": 1.0,
+            "total_reward": 49.60527190730152,
+            "budget": 50.0
+          },
+          {
+            "method": "CSRA",
+            "n_selected": 17,
+            "avg_epsilon": 1.0,
+            "total_reward": 48.977265452420546,
+            "budget": 50.0
+          }
+        ],
+        "final_accuracy": 0.01,
+        "best_accuracy": 0.01,
+        "elapsed_sec": 77.77675366401672,
+        "config": {
+          "n_devices": 50,
+          "gamma": 5.0,
+          "alpha": 0.5,
+          "model": "resnet18",
+          "local_epochs": 5,
+          "local_lr": 0.01,
+          "local_momentum": 0.9,
+          "distill_epochs": 1,
+          "distill_lr": 0.001,
+          "temperature": 3.0,
+          "public_samples": 20000,
+          "synthetic": false,
+          "method_config": {
+            "budget_per_round": 50.0
+          }
+        }
+      }
+    ]
+  }
+}
