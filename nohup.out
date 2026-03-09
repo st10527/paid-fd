@@ -1555,3 +1555,629 @@ Done. Check results with:
 ✅ Exp 6 saved to results/experiments/routeB_exp6_ablation.json
 
 🏁 All requested experiments complete!
+🖥 Using device: cuda
+  GPU: NVIDIA GeForce RTX 5070 Ti
+
+============================================================
+  Exp 1: PAID-FD, seed=123, 100 rounds
+============================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2865
+    Epoch 10/10: loss=1.8170
+  [Pre-training] Done. All local models will start from this checkpoint.
+    Round   0/100: acc=0.3770, loss=2.6040, part=0.66
+    Round  10/100: acc=0.5241, loss=2.0822, part=0.66
+    Round  20/100: acc=0.5645, loss=1.9369, part=0.66
+    Round  30/100: acc=0.5789, loss=1.8823, part=0.66
+    Round  40/100: acc=0.5907, loss=1.8618, part=0.66
+    Round  50/100: acc=0.5989, loss=1.8777, part=0.66
+    Round  60/100: acc=0.5996, loss=1.8959, part=0.66
+    Round  70/100: acc=0.5965, loss=1.8847, part=0.66
+    Round  80/100: acc=0.6101, loss=1.8887, part=0.66
+    Round  90/100: acc=0.6070, loss=1.8905, part=0.66
+    Round  99/100: acc=0.6094, loss=1.8930, part=0.66
+  → PAID-FD seed=123: final=0.6094, best=0.6130, time=4847s
+
+============================================================
+  Exp 1: PAID-FD, seed=456, 100 rounds
+============================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2292
+    Epoch 10/10: loss=1.7987
+  [Pre-training] Done. All local models will start from this checkpoint.
+    Round   0/100: acc=0.3570, loss=2.6976, part=0.66
+    Round  10/100: acc=0.5118, loss=2.0968, part=0.66
+    Round  20/100: acc=0.5689, loss=1.9190, part=0.66
+    Round  30/100: acc=0.5763, loss=1.9305, part=0.66
+    Round  40/100: acc=0.5824, loss=1.9120, part=0.66
+    Round  50/100: acc=0.5900, loss=1.9277, part=0.66
+    Round  60/100: acc=0.5987, loss=1.9056, part=0.66
+    Round  70/100: acc=0.5929, loss=1.9185, part=0.66
+    Round  80/100: acc=0.5943, loss=1.9382, part=0.66
+    Round  90/100: acc=0.6030, loss=1.9334, part=0.66
+    Round  99/100: acc=0.5982, loss=1.9346, part=0.66
+  → PAID-FD seed=456: final=0.5982, best=0.6057, time=4850s
+
+============================================================
+  Exp 1: Fixed-eps-0.5, seed=123, 100 rounds
+============================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Fixed-eps Pre-training] 10 epochs on public data ...
+    Epoch 1/10
+    Epoch 5/10
+    Epoch 10/10
+  [Fixed-eps Pre-training] Done.
+    Round   0/100: acc=0.3610, loss=2.6297, part=1.00
+    Round  10/100: acc=0.5180, loss=2.1180, part=1.00
+    Round  20/100: acc=0.5710, loss=1.8956, part=1.00
+    Round  30/100: acc=0.5798, loss=1.8762, part=1.00
+    Round  40/100: acc=0.5900, loss=1.8799, part=1.00
+    Round  50/100: acc=0.5996, loss=1.8777, part=1.00
+    Round  60/100: acc=0.5974, loss=1.8827, part=1.00
+    Round  70/100: acc=0.6078, loss=1.8766, part=1.00
+    Round  80/100: acc=0.6062, loss=1.8865, part=1.00
+    Round  90/100: acc=0.6057, loss=1.8913, part=1.00
+    Round  99/100: acc=0.6068, loss=1.8976, part=1.00
+  → Fixed-eps-0.5 seed=123: final=0.6068, best=0.6165, time=7061s
+
+============================================================
+  Exp 1: Fixed-eps-0.5, seed=456, 100 rounds
+============================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Fixed-eps Pre-training] 10 epochs on public data ...
+    Epoch 1/10
+    Epoch 5/10
+    Epoch 10/10
+  [Fixed-eps Pre-training] Done.
+    Round   0/100: acc=0.3834, loss=2.5835, part=1.00
+    Round  10/100: acc=0.4972, loss=2.1208, part=1.00
+    Round  20/100: acc=0.5544, loss=1.9490, part=1.00
+    Round  30/100: acc=0.5792, loss=1.8990, part=1.00
+    Round  40/100: acc=0.5789, loss=1.9048, part=1.00
+    Round  50/100: acc=0.5917, loss=1.9005, part=1.00
+    Round  60/100: acc=0.6014, loss=1.9026, part=1.00
+    Round  70/100: acc=0.6005, loss=1.9203, part=1.00
+    Round  80/100: acc=0.6032, loss=1.9074, part=1.00
+    Round  90/100: acc=0.6066, loss=1.9152, part=1.00
+    Round  99/100: acc=0.6025, loss=1.9306, part=1.00
+  → Fixed-eps-0.5 seed=456: final=0.6025, best=0.6111, time=7061s
+
+============================================================
+  Exp 1: Fixed-eps-1.0, seed=123, 100 rounds
+============================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Fixed-eps Pre-training] 10 epochs on public data ...
+    Epoch 1/10
+    Epoch 5/10
+    Epoch 10/10
+  [Fixed-eps Pre-training] Done.
+    Round   0/100: acc=0.3543, loss=2.6408, part=1.00
+    Round  10/100: acc=0.5186, loss=2.0972, part=1.00
+    Round  20/100: acc=0.5649, loss=1.9024, part=1.00
+    Round  30/100: acc=0.5872, loss=1.8600, part=1.00
+    Round  40/100: acc=0.5894, loss=1.8618, part=1.00
+    Round  50/100: acc=0.6075, loss=1.8404, part=1.00
+    Round  60/100: acc=0.5983, loss=1.8710, part=1.00
+    Round  70/100: acc=0.6071, loss=1.8751, part=1.00
+    Round  80/100: acc=0.6089, loss=1.8754, part=1.00
+    Round  90/100: acc=0.6114, loss=1.8703, part=1.00
+    Round  99/100: acc=0.6089, loss=1.9160, part=1.00
+  → Fixed-eps-1.0 seed=123: final=0.6089, best=0.6156, time=7065s
+
+============================================================
+  Exp 1: Fixed-eps-1.0, seed=456, 100 rounds
+============================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Fixed-eps Pre-training] 10 epochs on public data ...
+    Epoch 1/10
+    Epoch 5/10
+    Epoch 10/10
+  [Fixed-eps Pre-training] Done.
+    Round   0/100: acc=0.3895, loss=2.5692, part=1.00
+    Round  10/100: acc=0.5053, loss=2.1017, part=1.00
+    Round  20/100: acc=0.5556, loss=1.9480, part=1.00
+    Round  30/100: acc=0.5825, loss=1.8796, part=1.00
+    Round  40/100: acc=0.5839, loss=1.9050, part=1.00
+    Round  50/100: acc=0.5925, loss=1.8938, part=1.00
+    Round  60/100: acc=0.5882, loss=1.9167, part=1.00
+    Round  70/100: acc=0.5991, loss=1.9125, part=1.00
+    Round  80/100: acc=0.5975, loss=1.9238, part=1.00
+    Round  90/100: acc=0.5998, loss=1.9203, part=1.00
+    Round  99/100: acc=0.6010, loss=1.9054, part=1.00
+  → Fixed-eps-1.0 seed=456: final=0.6010, best=0.6071, time=7062s
+
+============================================================
+  Exp 1: FedAvg, seed=123, 100 rounds
+============================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+    Round   0/100: acc=0.0193, loss=4.5676, part=0.50
+    Round  10/100: acc=0.1547, loss=3.5396, part=0.50
+    Round  20/100: acc=0.2256, loss=3.1792, part=0.50
+    Round  30/100: acc=0.2937, loss=2.8156, part=0.50
+    Round  40/100: acc=0.3318, loss=2.6254, part=0.50
+    Round  50/100: acc=0.3716, loss=2.4287, part=0.50
+    Round  60/100: acc=0.3989, loss=2.3161, part=0.50
+    Round  70/100: acc=0.4227, loss=2.1985, part=0.50
+    Round  80/100: acc=0.4427, loss=2.1132, part=0.50
+    Round  90/100: acc=0.4557, loss=2.0633, part=0.50
+    Round  99/100: acc=0.4657, loss=2.0307, part=0.50
+  → FedAvg seed=123: final=0.4657, best=0.4670, time=3104s
+
+============================================================
+  Exp 1: FedAvg, seed=456, 100 rounds
+============================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+    Round   0/100: acc=0.0176, loss=4.5871, part=0.50
+    Round  10/100: acc=0.1671, loss=3.5217, part=0.50
+    Round  20/100: acc=0.2325, loss=3.1439, part=0.50
+    Round  30/100: acc=0.2976, loss=2.8003, part=0.50
+    Round  40/100: acc=0.3318, loss=2.6428, part=0.50
+    Round  50/100: acc=0.3766, loss=2.4078, part=0.50
+    Round  60/100: acc=0.4061, loss=2.2874, part=0.50
+    Round  70/100: acc=0.4255, loss=2.1880, part=0.50
+    Round  80/100: acc=0.4390, loss=2.1459, part=0.50
+    Round  90/100: acc=0.4554, loss=2.0723, part=0.50
+    Round  99/100: acc=0.4649, loss=2.0149, part=0.50
+  → FedAvg seed=456: final=0.4649, best=0.4649, time=3087s
+
+============================================================
+  Exp 1: FedMD, seed=123, 100 rounds
+============================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [FedMD Pre-training] 10 epochs on public data ...
+    Epoch 1/10
+    Epoch 5/10
+    Epoch 10/10
+  [FedMD Pre-training] Done.
+    Round   0/100: acc=0.3639, loss=2.4969, part=1.00
+    Round  10/100: acc=0.3827, loss=2.5086, part=1.00
+    Round  20/100: acc=0.3655, loss=2.5492, part=1.00
+    Round  30/100: acc=0.3542, loss=2.5655, part=1.00
+    Round  40/100: acc=0.3406, loss=2.5804, part=1.00
+    Round  50/100: acc=0.3525, loss=2.5711, part=1.00
+    Round  60/100: acc=0.3479, loss=2.5756, part=1.00
+    Round  70/100: acc=0.3454, loss=2.5911, part=1.00
+    Round  80/100: acc=0.3458, loss=2.5804, part=1.00
+    Round  90/100: acc=0.3371, loss=2.5971, part=1.00
+    Round  99/100: acc=0.3359, loss=2.5861, part=1.00
+  → FedMD seed=123: final=0.3359, best=0.3970, time=6876s
+
+============================================================
+  Exp 1: FedMD, seed=456, 100 rounds
+============================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [FedMD Pre-training] 10 epochs on public data ...
+    Epoch 1/10
+    Epoch 5/10
+    Epoch 10/10
+  [FedMD Pre-training] Done.
+    Round   0/100: acc=0.3749, loss=2.4884, part=1.00
+    Round  10/100: acc=0.3734, loss=2.5341, part=1.00
+    Round  20/100: acc=0.3692, loss=2.5453, part=1.00
+    Round  30/100: acc=0.3660, loss=2.5834, part=1.00
+    Round  40/100: acc=0.3566, loss=2.5953, part=1.00
+    Round  50/100: acc=0.3553, loss=2.5935, part=1.00
+    Round  60/100: acc=0.3560, loss=2.5990, part=1.00
+    Round  70/100: acc=0.3573, loss=2.5882, part=1.00
+    Round  80/100: acc=0.3534, loss=2.5856, part=1.00
+    Round  90/100: acc=0.3376, loss=2.6036, part=1.00
+    Round  99/100: acc=0.3516, loss=2.6038, part=1.00
+  → FedMD seed=456: final=0.3516, best=0.3957, time=6881s
+
+============================================================
+  Exp 1: FedGMKD, seed=123, 100 rounds
+============================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+    Round   0/100: acc=0.0221, loss=4.5440, part=1.00
+    Round  10/100: acc=0.1827, loss=3.6008, part=1.00
+    Round  20/100: acc=0.2493, loss=3.2070, part=1.00
+    Round  30/100: acc=0.2994, loss=2.9259, part=1.00
+    Round  40/100: acc=0.3362, loss=2.7133, part=1.00
+    Round  50/100: acc=0.3735, loss=2.5269, part=1.00
+    Round  60/100: acc=0.4031, loss=2.3812, part=1.00
+    Round  70/100: acc=0.4308, loss=2.2655, part=1.00
+    Round  80/100: acc=0.4469, loss=2.1809, part=1.00
+    Round  90/100: acc=0.4610, loss=2.1303, part=1.00
+    Round  99/100: acc=0.4731, loss=2.0919, part=1.00
+  → FedGMKD seed=123: final=0.4731, best=0.4731, time=9675s
+
+============================================================
+  Exp 1: FedGMKD, seed=456, 100 rounds
+============================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+    Round   0/100: acc=0.0216, loss=4.5733, part=1.00
+    Round  10/100: acc=0.1782, loss=3.6054, part=1.00
+    Round  20/100: acc=0.2548, loss=3.2015, part=1.00
+    Round  30/100: acc=0.2998, loss=2.9299, part=1.00
+    Round  40/100: acc=0.3457, loss=2.7040, part=1.00
+    Round  50/100: acc=0.3809, loss=2.5188, part=1.00
+    Round  60/100: acc=0.4111, loss=2.3610, part=1.00
+    Round  70/100: acc=0.4348, loss=2.2568, part=1.00
+    Round  80/100: acc=0.4539, loss=2.1734, part=1.00
+    Round  90/100: acc=0.4682, loss=2.1099, part=1.00
+    Round  99/100: acc=0.4781, loss=2.0777, part=1.00
+  → FedGMKD seed=456: final=0.4781, best=0.4781, time=9645s
+
+============================================================
+  Exp 1: CSRA, seed=123, 100 rounds
+============================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+    Round   0/100: acc=0.0100, loss=nan, part=0.32
+    Round  10/100: acc=0.0100, loss=nan, part=0.30
+    Round  20/100: acc=0.0100, loss=nan, part=0.34
+    Round  30/100: acc=0.0100, loss=nan, part=0.32
+    Round  40/100: acc=0.0100, loss=nan, part=0.34
+    Round  50/100: acc=0.0100, loss=nan, part=0.32
+    Round  60/100: acc=0.0100, loss=nan, part=0.32
+    Round  70/100: acc=0.0100, loss=nan, part=0.34
+    Round  80/100: acc=0.0100, loss=nan, part=0.32
+    Round  90/100: acc=0.0100, loss=nan, part=0.34
+    Round  99/100: acc=0.0100, loss=nan, part=0.32
+  → CSRA seed=123: final=0.0100, best=0.0100, time=2513s
+
+============================================================
+  Exp 1: CSRA, seed=456, 100 rounds
+============================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+    Round   0/100: acc=0.0100, loss=nan, part=0.34
+    Round  10/100: acc=0.0100, loss=nan, part=0.30
+    Round  20/100: acc=0.0100, loss=nan, part=0.32
+    Round  30/100: acc=0.0100, loss=nan, part=0.32
+    Round  40/100: acc=0.0100, loss=nan, part=0.34
+    Round  50/100: acc=0.0100, loss=nan, part=0.32
+    Round  60/100: acc=0.0100, loss=nan, part=0.32
+    Round  70/100: acc=0.0100, loss=nan, part=0.34
+    Round  80/100: acc=0.0100, loss=nan, part=0.32
+    Round  90/100: acc=0.0100, loss=nan, part=0.32
+    Round  99/100: acc=0.0100, loss=nan, part=0.32
+  → CSRA seed=456: final=0.0100, best=0.0100, time=2535s
+
+✅ Exp 1 saved to results/experiments/routeB_exp1_comparison.json
+
+============================================================
+  Exp 6: Full (PAID-FD), seed=123, 100 rounds
+  Flags: {'use_blue': True, 'use_ema': True, 'use_mixed_loss': True, 'use_ldp': True}
+============================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2865
+    Epoch 10/10: loss=1.8170
+  [Pre-training] Done. All local models will start from this checkpoint.
+    Round   0/100: acc=0.3770, loss=2.6040, part=0.66
+    Round  10/100: acc=0.5241, loss=2.0822, part=0.66
+    Round  20/100: acc=0.5645, loss=1.9369, part=0.66
+    Round  30/100: acc=0.5789, loss=1.8823, part=0.66
+    Round  40/100: acc=0.5907, loss=1.8618, part=0.66
+    Round  50/100: acc=0.5989, loss=1.8777, part=0.66
+    Round  60/100: acc=0.5996, loss=1.8959, part=0.66
+    Round  70/100: acc=0.5965, loss=1.8847, part=0.66
+    Round  80/100: acc=0.6101, loss=1.8887, part=0.66
+    Round  90/100: acc=0.6070, loss=1.8905, part=0.66
+    Round  99/100: acc=0.6094, loss=1.8930, part=0.66
+  → Full (PAID-FD) seed=123: final=0.6094, best=0.6130, time=4854s
+
+============================================================
+  Exp 6: Full (PAID-FD), seed=456, 100 rounds
+  Flags: {'use_blue': True, 'use_ema': True, 'use_mixed_loss': True, 'use_ldp': True}
+============================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2292
+    Epoch 10/10: loss=1.7987
+  [Pre-training] Done. All local models will start from this checkpoint.
+    Round   0/100: acc=0.3570, loss=2.6976, part=0.66
+    Round  10/100: acc=0.5118, loss=2.0968, part=0.66
+    Round  20/100: acc=0.5689, loss=1.9190, part=0.66
+    Round  30/100: acc=0.5763, loss=1.9305, part=0.66
+    Round  40/100: acc=0.5824, loss=1.9120, part=0.66
+    Round  50/100: acc=0.5900, loss=1.9277, part=0.66
+    Round  60/100: acc=0.5987, loss=1.9056, part=0.66
+    Round  70/100: acc=0.5929, loss=1.9185, part=0.66
+    Round  80/100: acc=0.5943, loss=1.9382, part=0.66
+    Round  90/100: acc=0.6030, loss=1.9334, part=0.66
+    Round  99/100: acc=0.5982, loss=1.9346, part=0.66
+  → Full (PAID-FD) seed=456: final=0.5982, best=0.6057, time=4849s
+
+============================================================
+  Exp 6: No-EMA, seed=123, 100 rounds
+  Flags: {'use_blue': True, 'use_ema': False, 'use_mixed_loss': True, 'use_ldp': True}
+============================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2865
+    Epoch 10/10: loss=1.8170
+  [Pre-training] Done. All local models will start from this checkpoint.
+    Round   0/100: acc=0.3770, loss=2.6040, part=0.66
+    Round  10/100: acc=0.5161, loss=2.1199, part=0.66
+    Round  20/100: acc=0.5540, loss=1.9636, part=0.66
+    Round  30/100: acc=0.5842, loss=1.8313, part=0.66
+    Round  40/100: acc=0.5950, loss=1.8158, part=0.66
+    Round  50/100: acc=0.5916, loss=1.8671, part=0.66
+    Round  60/100: acc=0.5963, loss=1.8592, part=0.66
+    Round  70/100: acc=0.6054, loss=1.8291, part=0.66
+    Round  80/100: acc=0.6089, loss=1.8608, part=0.66
+    Round  90/100: acc=0.6086, loss=1.8572, part=0.66
+    Round  99/100: acc=0.6105, loss=1.8564, part=0.66
+  → No-EMA seed=123: final=0.6105, best=0.6105, time=4859s
+
+============================================================
+  Exp 6: No-EMA, seed=456, 100 rounds
+  Flags: {'use_blue': True, 'use_ema': False, 'use_mixed_loss': True, 'use_ldp': True}
+============================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2292
+    Epoch 10/10: loss=1.7987
+  [Pre-training] Done. All local models will start from this checkpoint.
+    Round   0/100: acc=0.3570, loss=2.6976, part=0.66
+    Round  10/100: acc=0.5072, loss=2.1055, part=0.66
+    Round  20/100: acc=0.5613, loss=1.9106, part=0.66
+    Round  30/100: acc=0.5734, loss=1.8941, part=0.66
+    Round  40/100: acc=0.5858, loss=1.8668, part=0.66
+    Round  50/100: acc=0.5921, loss=1.8776, part=0.66
+    Round  60/100: acc=0.5957, loss=1.8821, part=0.66
+    Round  70/100: acc=0.5995, loss=1.9002, part=0.66
+    Round  80/100: acc=0.5982, loss=1.8993, part=0.66
+    Round  90/100: acc=0.6082, loss=1.8899, part=0.66
+    Round  99/100: acc=0.5999, loss=1.8996, part=0.66
+  → No-EMA seed=456: final=0.5999, best=0.6089, time=4852s
+
+============================================================
+  Exp 6: No-BLUE, seed=123, 100 rounds
+  Flags: {'use_blue': False, 'use_ema': True, 'use_mixed_loss': True, 'use_ldp': True}
+============================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2865
+    Epoch 10/10: loss=1.8170
+  [Pre-training] Done. All local models will start from this checkpoint.
+    Round   0/100: acc=0.3808, loss=2.6100, part=0.66
+    Round  10/100: acc=0.5303, loss=2.0691, part=0.66
+    Round  20/100: acc=0.5689, loss=1.9220, part=0.66
+    Round  30/100: acc=0.5838, loss=1.8542, part=0.66
+    Round  40/100: acc=0.5938, loss=1.8679, part=0.66
+    Round  50/100: acc=0.5915, loss=1.8957, part=0.66
+    Round  60/100: acc=0.5995, loss=1.8903, part=0.66
+    Round  70/100: acc=0.6025, loss=1.8797, part=0.66
+    Round  80/100: acc=0.6071, loss=1.8876, part=0.66
+    Round  90/100: acc=0.6036, loss=1.9080, part=0.66
+    Round  99/100: acc=0.6122, loss=1.8759, part=0.66
+  → No-BLUE seed=123: final=0.6122, best=0.6137, time=4859s
+
+============================================================
+  Exp 6: No-BLUE, seed=456, 100 rounds
+  Flags: {'use_blue': False, 'use_ema': True, 'use_mixed_loss': True, 'use_ldp': True}
+============================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2292
+    Epoch 10/10: loss=1.7987
+  [Pre-training] Done. All local models will start from this checkpoint.
+    Round   0/100: acc=0.3584, loss=2.6834, part=0.66
+    Round  10/100: acc=0.5118, loss=2.0868, part=0.66
+    Round  20/100: acc=0.5647, loss=1.9084, part=0.66
+    Round  30/100: acc=0.5734, loss=1.9318, part=0.66
+    Round  40/100: acc=0.5875, loss=1.9054, part=0.66
+    Round  50/100: acc=0.5920, loss=1.9276, part=0.66
+    Round  60/100: acc=0.5975, loss=1.8988, part=0.66
+    Round  70/100: acc=0.5973, loss=1.9040, part=0.66
+    Round  80/100: acc=0.5982, loss=1.9299, part=0.66
+    Round  90/100: acc=0.6030, loss=1.9367, part=0.66
+    Round  99/100: acc=0.5977, loss=1.9398, part=0.66
+  → No-BLUE seed=456: final=0.5977, best=0.6032, time=4852s
+
+============================================================
+  Exp 6: No-CE (pure KL), seed=123, 100 rounds
+  Flags: {'use_blue': True, 'use_ema': True, 'use_mixed_loss': False, 'use_ldp': True}
+============================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2865
+    Epoch 10/10: loss=1.8170
+  [Pre-training] Done. All local models will start from this checkpoint.
+    Round   0/100: acc=0.2917, loss=3.1284, part=0.66
+    Round  10/100: acc=0.2348, loss=3.3171, part=0.66
+    Round  20/100: acc=0.1624, loss=3.4243, part=0.66
+    Round  30/100: acc=0.1571, loss=3.4240, part=0.66
+    Round  40/100: acc=0.1396, loss=3.4238, part=0.66
+    Round  50/100: acc=0.1303, loss=3.4368, part=0.66
+    Round  60/100: acc=0.1452, loss=3.4216, part=0.66
+    Round  70/100: acc=0.1390, loss=3.4256, part=0.66
+    Round  80/100: acc=0.1387, loss=3.4139, part=0.66
+    Round  90/100: acc=0.1329, loss=3.4226, part=0.66
+    Round  99/100: acc=0.1457, loss=3.4099, part=0.66
+  → No-CE (pure KL) seed=123: final=0.1457, best=0.3277, time=4854s
+
+============================================================
+  Exp 6: No-CE (pure KL), seed=456, 100 rounds
+  Flags: {'use_blue': True, 'use_ema': True, 'use_mixed_loss': False, 'use_ldp': True}
+============================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2292
+    Epoch 10/10: loss=1.7987
+  [Pre-training] Done. All local models will start from this checkpoint.
+    Round   0/100: acc=0.2966, loss=3.1816, part=0.66
+    Round  10/100: acc=0.2311, loss=3.3351, part=0.66
+    Round  20/100: acc=0.1812, loss=3.3926, part=0.66
+    Round  30/100: acc=0.1516, loss=3.4432, part=0.66
+    Round  40/100: acc=0.1414, loss=3.4385, part=0.66
+    Round  50/100: acc=0.1390, loss=3.4441, part=0.66
+    Round  60/100: acc=0.1326, loss=3.4363, part=0.66
+    Round  70/100: acc=0.1474, loss=3.4208, part=0.66
+    Round  80/100: acc=0.1362, loss=3.4366, part=0.66
+    Round  90/100: acc=0.1383, loss=3.4370, part=0.66
+    Round  99/100: acc=0.1278, loss=3.4459, part=0.66
+  → No-CE (pure KL) seed=456: final=0.1278, best=0.3300, time=4848s
+
+============================================================
+  Exp 6: Bare-FD, seed=123, 100 rounds
+  Flags: {'use_blue': False, 'use_ema': False, 'use_mixed_loss': False, 'use_ldp': True}
+============================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2865
+    Epoch 10/10: loss=1.8170
+  [Pre-training] Done. All local models will start from this checkpoint.
+    Round   0/100: acc=0.2914, loss=3.1329, part=0.66
+    Round  10/100: acc=0.3087, loss=3.2038, part=0.66
+    Round  20/100: acc=0.2812, loss=3.2749, part=0.66
+    Round  30/100: acc=0.2747, loss=3.2693, part=0.66
+    Round  40/100: acc=0.2412, loss=3.3216, part=0.66
+    Round  50/100: acc=0.2250, loss=3.3349, part=0.66
+    Round  60/100: acc=0.2224, loss=3.3312, part=0.66
+    Round  70/100: acc=0.2096, loss=3.3457, part=0.66
+    Round  80/100: acc=0.2090, loss=3.3537, part=0.66
+    Round  90/100: acc=0.2064, loss=3.3664, part=0.66
+    Round  99/100: acc=0.2047, loss=3.3506, part=0.66
+  → Bare-FD seed=123: final=0.2047, best=0.3387, time=4857s
+
+============================================================
+  Exp 6: Bare-FD, seed=456, 100 rounds
+  Flags: {'use_blue': False, 'use_ema': False, 'use_mixed_loss': False, 'use_ldp': True}
+============================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2292
+    Epoch 10/10: loss=1.7987
+  [Pre-training] Done. All local models will start from this checkpoint.
+    Round   0/100: acc=0.2826, loss=3.2064, part=0.66
+    Round  10/100: acc=0.3198, loss=3.1986, part=0.66
+    Round  20/100: acc=0.2992, loss=3.2494, part=0.66
+    Round  30/100: acc=0.2653, loss=3.3005, part=0.66
+    Round  40/100: acc=0.2664, loss=3.2934, part=0.66
+    Round  50/100: acc=0.2515, loss=3.3268, part=0.66
+    Round  60/100: acc=0.2266, loss=3.3450, part=0.66
+    Round  70/100: acc=0.2256, loss=3.3395, part=0.66
+    Round  80/100: acc=0.2039, loss=3.3613, part=0.66
+    Round  90/100: acc=0.2181, loss=3.3488, part=0.66
+    Round  99/100: acc=0.2133, loss=3.3589, part=0.66
+  → Bare-FD seed=456: final=0.2133, best=0.3367, time=4843s
+
+============================================================
+  Exp 6: No-LDP (oracle), seed=123, 100 rounds
+  Flags: {'use_blue': True, 'use_ema': True, 'use_mixed_loss': True, 'use_ldp': False}
+============================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2865
+    Epoch 10/10: loss=1.8170
+  [Pre-training] Done. All local models will start from this checkpoint.
+    Round   0/100: acc=0.3918, loss=2.5775, part=0.66
+    Round  10/100: acc=0.5328, loss=2.0588, part=0.66
+    Round  20/100: acc=0.5676, loss=1.9350, part=0.66
+    Round  30/100: acc=0.5873, loss=1.8634, part=0.66
+    Round  40/100: acc=0.5984, loss=1.8560, part=0.66
+    Round  50/100: acc=0.6009, loss=1.8640, part=0.66
+    Round  60/100: acc=0.6004, loss=1.8946, part=0.66
+    Round  70/100: acc=0.6076, loss=1.8486, part=0.66
+    Round  80/100: acc=0.6094, loss=1.8785, part=0.66
+    Round  90/100: acc=0.6074, loss=1.8976, part=0.66
+    Round  99/100: acc=0.6097, loss=1.8791, part=0.66
+  → No-LDP (oracle) seed=123: final=0.6097, best=0.6144, time=4743s
+
+============================================================
+  Exp 6: No-LDP (oracle), seed=456, 100 rounds
+  Flags: {'use_blue': True, 'use_ema': True, 'use_mixed_loss': True, 'use_ldp': False}
+============================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2292
+    Epoch 10/10: loss=1.7987
+  [Pre-training] Done. All local models will start from this checkpoint.
+    Round   0/100: acc=0.3728, loss=2.6516, part=0.66
+    Round  10/100: acc=0.5176, loss=2.0735, part=0.66
+    Round  20/100: acc=0.5690, loss=1.9037, part=0.66
+    Round  30/100: acc=0.5827, loss=1.9164, part=0.66
+    Round  40/100: acc=0.5892, loss=1.8996, part=0.66
+    Round  50/100: acc=0.5907, loss=1.9054, part=0.66
+    Round  60/100: acc=0.5991, loss=1.8942, part=0.66
+    Round  70/100: acc=0.6000, loss=1.9129, part=0.66
+    Round  80/100: acc=0.6007, loss=1.9142, part=0.66
+    Round  90/100: acc=0.6020, loss=1.9422, part=0.66
+    Round  99/100: acc=0.6065, loss=1.9195, part=0.66
+  → No-LDP (oracle) seed=456: final=0.6065, best=0.6107, time=4731s
+
+✅ Exp 6 saved to results/experiments/routeB_exp6_ablation.json
+
+🏁 All requested experiments complete!
