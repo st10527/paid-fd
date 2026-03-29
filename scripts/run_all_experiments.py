@@ -370,10 +370,11 @@ def _create_method(method_name: str, model, config: dict, device: str):
             local_epochs=local_epochs,
             local_lr=local_lr,
             local_momentum=tc.get('local_momentum', 0.9),
-            distill_epochs=1,
-            distill_lr=0.001,
-            temperature=3.0,
-            pretrain_epochs=10,
+            distill_epochs=mc.get('distill_epochs', 1),
+            distill_lr=mc.get('distill_lr', 0.001),
+            temperature=mc.get('temperature', 3.0),
+            pretrain_epochs=mc.get('pretrain_epochs', 10),
+            pretrain_lr=mc.get('pretrain_lr', 0.1),
             clip_bound=mc.get('clip_bound', 2.0),
             public_samples=mc.get('public_samples_per_round', 1000),
             # v8 ablation flags
@@ -388,11 +389,12 @@ def _create_method(method_name: str, model, config: dict, device: str):
             epsilon=eps,
             local_epochs=local_epochs,
             local_lr=local_lr,
-            distill_epochs=1,
-            distill_lr=0.001,
-            temperature=3.0,
-            pretrain_epochs=10,
-            clip_bound=2.0,
+            distill_epochs=mc.get('distill_epochs', 1),
+            distill_lr=mc.get('distill_lr', 0.001),
+            temperature=mc.get('temperature', 3.0),
+            pretrain_epochs=mc.get('pretrain_epochs', 10),
+            pretrain_lr=mc.get('pretrain_lr', 0.1),
+            clip_bound=mc.get('clip_bound', 2.0),
             participation_rate=mc.get('participation_rate', 1.0),
             samples_per_device=mc.get('samples_per_device', 100),
         )
@@ -411,10 +413,12 @@ def _create_method(method_name: str, model, config: dict, device: str):
         cfg = FedMDConfig(
             local_epochs=local_epochs,
             local_lr=local_lr,
-            distill_epochs=distill_epochs,
-            distill_lr=distill_lr,
-            temperature=3.0,  # T=3 for noise-free (richer soft label signal)
-            clip_bound=5.0,
+            distill_epochs=mc.get('distill_epochs', distill_epochs),
+            distill_lr=mc.get('distill_lr', distill_lr),
+            temperature=mc.get('temperature', 3.0),
+            pretrain_epochs=mc.get('pretrain_epochs', 10),
+            pretrain_lr=mc.get('pretrain_lr', 0.1),
+            clip_bound=mc.get('clip_bound', 5.0),
         )
         return FedMD(m, cfg, 100, device)
     
