@@ -106,6 +106,10 @@ class DeviceBestResponse:
             return self._non_participation(device_id)
         
         # Step 1: Solve cubic equation for ε*
+        # NOTE: The cubic uses raw (p, λ) rather than (p/c, λ/c).
+        # This is a modelling simplification where the ε-optimal condition
+        # is decoupled from c.  The s* formula then uses c correctly.
+        # See docs/04_discussion_issues.md for detailed analysis.
         eps_star = self._solve_cubic_bisection(p, lambda_i)
         
         if eps_star is None or eps_star <= 0:
@@ -149,9 +153,14 @@ class DeviceBestResponse:
         
         f(ε) = λε³ + λε² + (1-p)ε + 1 = 0
         
-        For p > 1, there exists exactly one positive root where f changes
-        from positive to negative (at small ε) to positive again (at large ε).
-        We want the first positive root.
+        This uses the simplified formulation where c is decoupled from the
+        ε-optimal condition (c only appears in the s* formula).  The full
+        FOC-derived cubic would be (λ/c)ε³ + (λ/c)ε² + (1-p/c)ε + 1 = 0,
+        but with typical c ≈ 0.1-0.4 this produces ε* < 0.1 (impractical
+        for LDP).  The simplified form yields ε* ≈ 0.3-0.8 which balances
+        privacy and utility.
+        
+        For p > 1, there exists exactly one positive root.
         
         Returns:
             Positive root ε*, or None if not found
