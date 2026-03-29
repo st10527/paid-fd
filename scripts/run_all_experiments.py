@@ -370,18 +370,14 @@ def _create_method(method_name: str, model, config: dict, device: str):
             local_epochs=local_epochs,
             local_lr=local_lr,
             local_momentum=tc.get('local_momentum', 0.9),
-            distill_epochs=1,       # 1 epoch/round
-            distill_lr=0.001,       # Moderate lr (safe: EMA buffer is smooth)
-            distill_alpha=mc.get('distill_alpha', 0.7),  # 70% KL + 30% CE
-            temperature=3.0,        # Soft-label T=3
-            ema_momentum=mc.get('ema_momentum', 0.9),    # EMA logit buffer
-            pretrain_epochs=10,     # 10 ep: ~35-40% start, FL has room
-            clip_bound=mc.get('clip_bound', 2.0),   # C=2: reduced sensitivity
+            distill_epochs=1,
+            distill_lr=0.001,
+            temperature=3.0,
+            pretrain_epochs=10,
+            clip_bound=mc.get('clip_bound', 2.0),
             public_samples=mc.get('public_samples_per_round', 1000),
-            # Ablation flags (Exp 6) — default True = full pipeline
+            # v8 ablation flags
             use_blue=mc.get('use_blue', True),
-            use_ema=mc.get('use_ema', True),
-            use_mixed_loss=mc.get('use_mixed_loss', True),
             use_ldp=mc.get('use_ldp', True),
         )
         return PAIDFD(m, cfg, 100, device)
@@ -393,12 +389,10 @@ def _create_method(method_name: str, model, config: dict, device: str):
             local_epochs=local_epochs,
             local_lr=local_lr,
             distill_epochs=1,
-            distill_lr=0.001,       # Match PAID-FD
-            distill_alpha=0.7,      # 70% KL + 30% CE
-            temperature=3.0,        # Soft-label T=3
-            ema_momentum=0.9,       # EMA logit buffer
-            pretrain_epochs=10,     # Match PAID-FD
-            clip_bound=2.0,              # Match PAID-FD C=2
+            distill_lr=0.001,
+            temperature=3.0,
+            pretrain_epochs=10,
+            clip_bound=2.0,
             participation_rate=mc.get('participation_rate', 1.0),
             samples_per_device=mc.get('samples_per_device', 100),
         )

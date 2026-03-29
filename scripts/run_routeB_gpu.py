@@ -27,8 +27,6 @@ EXP1_METHODS = {
     "PAID-FD": {
         "gamma": 5.0, "delta": 0.01,
         "clip_bound": 2.0,
-        "ema_momentum": 0.9,
-        "distill_alpha": 0.7,
     },
     "Fixed-eps-0.5": {
         "participation_rate": 1.0,
@@ -115,22 +113,13 @@ def run_exp1(seeds=[42, 123, 456], n_rounds=100, device="cuda", quick=False):
 
 EXP6_VARIANTS = {
     "Full (PAID-FD)": {
-        "use_blue": True, "use_ema": True, "use_mixed_loss": True, "use_ldp": True,
-    },
-    "No-EMA": {
-        "use_blue": True, "use_ema": False, "use_mixed_loss": True, "use_ldp": True,
+        "use_blue": True, "use_ldp": True,
     },
     "No-BLUE": {
-        "use_blue": False, "use_ema": True, "use_mixed_loss": True, "use_ldp": True,
-    },
-    "No-CE (pure KL)": {
-        "use_blue": True, "use_ema": True, "use_mixed_loss": False, "use_ldp": True,
-    },
-    "Bare-FD": {
-        "use_blue": False, "use_ema": False, "use_mixed_loss": False, "use_ldp": True,
+        "use_blue": False, "use_ldp": True,
     },
     "No-LDP (oracle)": {
-        "use_blue": True, "use_ema": True, "use_mixed_loss": True, "use_ldp": False,
+        "use_blue": True, "use_ldp": False,
     },
 }
 
@@ -154,9 +143,7 @@ def run_exp6(seeds=[42, 123, 456], n_rounds=100, device="cuda", quick=False):
             mc = {
                 "gamma": 5.0, "delta": 0.01,
                 "clip_bound": 2.0,
-                "ema_momentum": 0.9,
-                "distill_alpha": 0.7,
-                **ablation_flags,  # Ablation flags passed to PAIDFDConfig
+                **ablation_flags,
             }
             
             config = {
