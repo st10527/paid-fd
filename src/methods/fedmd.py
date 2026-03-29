@@ -1,17 +1,16 @@
 """
-FedMD v8.1: Noise-free Federated Distillation baseline.
+FedMD v8.2: Noise-free Federated Distillation baseline.
 
-Standard FD flow (v8): Each round, ALL devices get a fresh copy of the
+Standard FD flow: Each round, ALL devices get a fresh copy of the
 server model, train locally, upload clean (no noise) logits, server
-distills via CE-anchored KL.  No persistent local models, no EMA.
-
-v8.1 fixes: Fresh SGD per round + CE anchor (same as PAID-FD v8.1).
+distills via KL.  No persistent local models, no EMA.
 
 This is the noise-free FD oracle -- upper bound for FD methods.
 The ONLY differences vs PAID-FD are:
   - No Stackelberg game / pricing (all devices participate)
   - No LDP noise on logits
   - No BLUE weighting (equal weight average)
+  - Denoising disabled by default (no noise to denoise)
 """
 
 import torch
@@ -29,18 +28,19 @@ from ..models.utils import copy_model
 
 @dataclass
 class FedMDConfig:
-    """Configuration for FedMD (noise-free FD)."""
+    """Configuration for FedMD (noise-free FD oracle)."""
     local_epochs: int = 5
     local_lr: float = 0.01
     local_momentum: float = 0.9
     distill_epochs: int = 5
     distill_lr: float = 0.001
     temperature: float = 3.0
-    ce_anchor_alpha: float = 0.5
+    ce_anchor_alpha: float = 0.0   # v8.2: pure KL by default
     pretrain_epochs: int = 10
     pretrain_lr: float = 0.1
     clip_bound: float = 5.0
     public_samples: int = 20000
+    use_denoising: bool = False    # No noise → no need for denoising
 
 
 class FedMD(FederatedMethod):
@@ -143,8 +143,12 @@ class FedMD(FederatedMethod):
             N = len(all_logits)
             min_len = min(len(l) for l in all_logits)
             aggregated = sum(l[:min_len] for l in all_logits) / N
+
+            # v8.2: Class-conditional denoising (optional, off by default for FedMD)
+            denoised = self._denoise_logits(aggregated, public_labels[:min_len])
+
             T = self.config.temperature
-            teacher_probs = F.softmax(aggregated / T, dim=1)
+            teacher_probs = F.softmax(denoised / T, dim=1)
             self._distill_to_server(teacher_probs, public_images[:min_len],
                                     public_labels[:min_len])
 
@@ -202,8 +206,21 @@ class FedMD(FederatedMethod):
                 print(f"    Epoch {epoch+1}/{self.config.pretrain_epochs}")
         print(f"  [FedMD Pre-training] Done.")
 
+    def _denoise_logits(self, aggregated, public_labels):
+        """Class-conditional denoising (no-op when use_denoising=False)."""
+        if not self.config.use_denoising:
+            return aggregated
+        denoised = aggregated.clone()
+        for c in range(self.n_classes):
+            mask = (public_labels == c)
+            n_c = mask.sum().item()
+            if n_c > 1:
+                class_mean = aggregated[mask].mean(dim=0)
+                denoised[mask] = class_mean.unsqueeze(0).expand(n_c, -1)
+        return denoised
+
     def _distill_to_server(self, teacher_probs, public_images, public_labels=None):
-        """v8.1: CE-anchored KL distillation with fresh optimizer."""
+        """v8.2: KL distillation with fresh SGD (optional CE anchor)."""
         self.server_model.train()
         optimizer = torch.optim.SGD(
             self.server_model.parameters(),

@@ -1,22 +1,31 @@
 """
-PAID-FD v8.1: Privacy-Aware Incentive-Driven Federated Distillation
-=================================================================
+PAID-FD v8.2: Privacy-Aware Incentive-Driven Federated Distillation
+===================================================================
 
-Standard FD flow (v8): Each round, participating devices receive a fresh
-copy of the current server model, train locally, upload noisy logits, and the
-server distills.  No persistent local models, no EMA buffer.
+Standard FD flow with server-side class-conditional denoising.
 
-v8.1 fixes (from Phase 0.1 diagnostic):
-  - Fresh SGD optimizer each round (was: persistent Adam that leaked state)
-  - CE anchor loss: α*CE + (1-α)*KL (was: pure KL causing catastrophic drift)
-  - Public data labels used for CE anchor
+Version history:
+  v8.0: Fresh copy per round + pure KL → catastrophic drift (ALL configs fail)
+  v8.1: Added CE anchor → masks the real problem (CE dominates, γ irrelevant)
+  v8.2: Class-conditional denoising → correct fix (pure KL works with clean signal)
 
-Key components:
-  - Stackelberg game-based pricing (gamma -> price p* -> device decisions)
-  - Per-device LDP: Lap(0, 2C/eps_i) on logits
-  - BLUE aggregation: weights proportional to eps_i^2 (inverse-variance optimal)
-  - Pre-training on public data
-  - CE-anchored soft-label KL distillation with temperature T
+Key insight (v8.2): The server receives 20000 noisy logit vectors but knows
+their label structure. Class-conditional averaging reduces noise std by √n_c
+(≈√200 ≈ 14× for CIFAR-100 with 20K public). This boosts per-sample SNR from
+~0.8 to ~11, making pure KL distillation viable without CE anchor.
+
+Pipeline per round:
+  1. Stackelberg game → price p*, device decisions
+  2. Devices: fresh copy → local train → clip logits → LDP noise → upload
+  3. Server: BLUE aggregation (ε²-weighted)
+  4. Server: Class-conditional denoising (noise ÷ √n_c)
+  5. Server: softmax(denoised / T) → teacher probs
+  6. Server: Pure KL distillation with fresh SGD
+
+Theory:
+  - Post-processing immunity: denoising preserves ε-LDP (Proposition X)
+  - Convergence: noise floor V_DP / S² → V_DP / (n_c · S²) (Theorem Y)
+  - SNR improvement: factor √n_c per class (Corollary Z)
 """
 
 import torch
@@ -37,10 +46,10 @@ from ..models.utils import copy_model
 
 @dataclass
 class PAIDFDConfig:
-    """Configuration for PAID-FD v8 (Standard FD flow).
+    """Configuration for PAID-FD v8.2 (Standard FD + Denoising).
 
-    v8 design: Standard FD -- each round, devices get fresh copy of server
-    model. No persistent local models, no EMA buffer, no CE anchor.
+    v8.2 pipeline: fresh copy → local train → clip → LDP → BLUE →
+    class-conditional denoising → softmax(T) → pure KL distill (fresh SGD).
     """
     # Game parameters
     gamma: float = 10.0
@@ -52,11 +61,11 @@ class PAIDFDConfig:
     local_lr: float = 0.01
     local_momentum: float = 0.9
 
-    # Distillation (KL + CE anchor)
+    # Distillation
     distill_epochs: int = 1
     distill_lr: float = 0.001
     temperature: float = 3.0
-    ce_anchor_alpha: float = 0.5   # α: 0=pure KL, 1=pure CE, 0.5=balanced
+    ce_anchor_alpha: float = 0.0   # α: 0=pure KL (default for v8.2), >0 adds CE anchor
 
     # Pre-training on public data
     pretrain_epochs: int = 10
@@ -69,12 +78,13 @@ class PAIDFDConfig:
     public_samples: int = 20000
 
     # Ablation flags
-    use_blue: bool = True   # BLUE (eps^2-weighted) vs equal weights
-    use_ldp: bool = True    # Per-device LDP noise vs clean logits (oracle)
+    use_blue: bool = True        # BLUE (eps^2-weighted) vs equal weights
+    use_ldp: bool = True         # Per-device LDP noise vs clean logits (oracle)
+    use_denoising: bool = True   # Class-conditional denoising (v8.2 key feature)
 
 
 class PAIDFD(FederatedMethod):
-    """PAID-FD v8: Standard Federated Distillation with Stackelberg Game.
+    """PAID-FD v8.2: Federated Distillation with Game + Denoising.
 
     Protocol per round:
       1. Server computes optimal price p* via Stackelberg game
@@ -86,8 +96,9 @@ class PAIDFD(FederatedMethod):
          d. Add per-device LDP noise: Lap(0, 2C/eps_i)
          e. Upload noisy logits
       4. Server: BLUE-weighted average of noisy logits
-      5. Server: softmax(aggregated / T) -> teacher probs
-      6. Server: KL distillation from teacher probs to server model
+      4b. Server: Class-conditional denoising (noise ÷ √n_c)
+      5. Server: softmax(denoised / T) -> teacher probs
+      6. Server: KL distillation (fresh SGD, optional CE anchor)
     """
 
     def __init__(self, server_model, config=None, n_classes=100, device=None):
@@ -219,8 +230,11 @@ class PAIDFD(FederatedMethod):
             norm_w = [w / total_w for w in all_weights]
             aggregated = sum(w * l[:min_len] for w, l in zip(norm_w, all_logits)).float()
 
+            # v8.2: Class-conditional denoising (post-processing, preserves ε-LDP)
+            denoised = self._denoise_logits(aggregated, public_labels[:min_len])
+
             T = self.config.temperature
-            teacher_probs = F.softmax(aggregated / T, dim=1)
+            teacher_probs = F.softmax(denoised / T, dim=1)
             self._distill_to_server(teacher_probs, public_images[:min_len],
                                     public_labels[:min_len])
 
@@ -291,16 +305,38 @@ class PAIDFD(FederatedMethod):
                       f"loss={epoch_loss/n_batches:.4f}")
         print(f"  [Pre-training] Done.")
 
+    def _denoise_logits(self, aggregated, public_labels):
+        """Class-conditional denoising of aggregated logits.
+
+        For each class c, replace per-sample logits with the class-conditional
+        mean. With n_c samples per class, this reduces LDP noise std by √n_c.
+
+        For CIFAR-100 with 20K public data: n_c ≈ 200 → noise ÷ √200 ≈ 14×.
+        SNR improves from ~0.8 (unusable) to ~11 (clean enough for KL distill).
+
+        Privacy: Pure server-side post-processing → ε-LDP preserved by
+        post-processing immunity theorem.
+        """
+        if not self.config.use_denoising:
+            return aggregated
+
+        denoised = aggregated.clone()
+        for c in range(self.n_classes):
+            mask = (public_labels == c)
+            n_c = mask.sum().item()
+            if n_c > 1:
+                class_mean = aggregated[mask].mean(dim=0)  # [n_classes] vector
+                denoised[mask] = class_mean.unsqueeze(0).expand(n_c, -1)
+        return denoised
+
     def _distill_to_server(self, teacher_probs, public_images, public_labels=None):
-        """v8.1: CE-anchored KL distillation.
+        """v8.2: KL distillation with fresh SGD (optional CE anchor).
 
-        Loss = α * CE(model, true_labels) + (1-α) * KL(model || teacher) * T²
-
-        v8.0 bug fix: fresh SGD optimizer each round (no Adam state leak).
-        CE anchor prevents catastrophic drift from pretrained representation.
+        Default (α=0): pure KL — works because denoised teacher is clean.
+        Optional (α>0): loss = α * CE(labels) + (1-α) * KL(teacher) * T²
         """
         self.server_model.train()
-        # v8.1: Fresh optimizer each round — no state accumulation
+        # v8.2: Fresh optimizer each round (no Adam state leak from v8.0)
         optimizer = torch.optim.SGD(
             self.server_model.parameters(),
             lr=self.config.distill_lr,

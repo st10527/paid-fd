@@ -30,13 +30,14 @@ class FixedEpsilonConfig:
     distill_epochs: int = 1
     distill_lr: float = 0.001
     temperature: float = 3.0
-    ce_anchor_alpha: float = 0.5
+    ce_anchor_alpha: float = 0.0   # v8.2: pure KL by default
     pretrain_epochs: int = 10
     pretrain_lr: float = 0.1
     clip_bound: float = 2.0
     participation_rate: float = 1.0
     samples_per_device: int = 100
     public_samples: int = 20000
+    use_denoising: bool = True     # v8.2: class-conditional denoising
 
 
 class FixedEpsilon(FederatedMethod):
@@ -153,8 +154,12 @@ class FixedEpsilon(FederatedMethod):
             N = len(all_logits)
             min_len = min(len(l) for l in all_logits)
             aggregated = sum(l[:min_len] for l in all_logits) / N
+
+            # v8.2: Class-conditional denoising
+            denoised = self._denoise_logits(aggregated, public_labels[:min_len])
+
             T = self.config.temperature
-            teacher_probs = F.softmax(aggregated.float() / T, dim=1)
+            teacher_probs = F.softmax(denoised.float() / T, dim=1)
             self._distill_to_server(teacher_probs, public_images[:min_len],
                                     public_labels[:min_len])
 
@@ -211,8 +216,21 @@ class FixedEpsilon(FederatedMethod):
                 print(f"    Epoch {epoch+1}/{self.config.pretrain_epochs}")
         print(f"  [Fixed-eps Pre-training] Done.")
 
+    def _denoise_logits(self, aggregated, public_labels):
+        """Class-conditional denoising (reduces LDP noise by √n_c)."""
+        if not self.config.use_denoising:
+            return aggregated
+        denoised = aggregated.clone()
+        for c in range(self.n_classes):
+            mask = (public_labels == c)
+            n_c = mask.sum().item()
+            if n_c > 1:
+                class_mean = aggregated[mask].mean(dim=0)
+                denoised[mask] = class_mean.unsqueeze(0).expand(n_c, -1)
+        return denoised
+
     def _distill_to_server(self, teacher_probs, public_images, public_labels=None):
-        """v8.1: CE-anchored KL distillation with fresh optimizer."""
+        """v8.2: KL distillation with fresh SGD (optional CE anchor)."""
         self.server_model.train()
         optimizer = torch.optim.SGD(
             self.server_model.parameters(),
