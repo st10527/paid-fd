@@ -2181,3 +2181,278 @@ Done. Check results with:
 ✅ Exp 6 saved to results/experiments/routeB_exp6_ablation.json
 
 🏁 All requested experiments complete!
+🖥 Using device: cuda
+  GPU: NVIDIA GeForce RTX 5070 Ti
+
+📋 Configs to test: [1, 2, 3, 4, 5, 6]
+   Rounds per config: 20
+   This tests WHY distillation destroys pretrain knowledge.
+
+
+======================================================================
+  Config 1: C=1.0 (halve sensitivity)
+  4x less noise variance, same lr
+  Method: PAID-FD, 20 rounds, seed=42
+======================================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2905
+    Epoch 10/10: loss=1.7921
+  [Pre-training] Done.
+    Round   0/20: acc=0.2498, loss=3.7377, part=0.70
+    Round  10/20: acc=0.1139, loss=4.0165, part=0.70
+    Round  19/20: acc=0.0746, loss=4.0897, part=0.70
+
+  Round-by-round accuracy:
+    R 0: 0.2498 ← first distill
+    R 1: 0.2450
+    R 2: 0.2105 ↓↓
+    R 3: 0.1849 ↓↓
+    R 4: 0.1777 ↓↓
+    R 5: 0.1692 ↓↓
+    R 6: 0.1522 ↓↓
+    R 7: 0.1427 ↓↓
+    R 8: 0.1226 ↓↓
+    R 9: 0.1155 ↓↓
+    R10: 0.1139 ↓↓
+    R11: 0.1095 ↓↓
+    R12: 0.0922 ↓↓
+    R13: 0.0874 ↓↓
+    R14: 0.0817 ↓↓
+    R15: 0.0819 ↓↓
+    R16: 0.0826 ↓↓
+    R17: 0.0865 ↓↓
+    R18: 0.0805 ↓↓
+    R19: 0.0746 ↓↓
+
+  Final: 0.0746, Best: 0.2498, Δ(final-R0): -0.1752, Time: 1589s
+
+======================================================================
+  Config 2: lr=0.0001 (10x smaller)
+  Same noise, but very gentle distillation
+  Method: PAID-FD, 20 rounds, seed=42
+======================================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2905
+    Epoch 10/10: loss=1.7921
+  [Pre-training] Done.
+    Round   0/20: acc=0.4020, loss=2.8664, part=0.70
+    Round  10/20: acc=0.2568, loss=3.4135, part=0.70
+    Round  19/20: acc=0.1642, loss=3.5905, part=0.70
+
+  Round-by-round accuracy:
+    R 0: 0.4020 ← first distill
+    R 1: 0.3743 ↓↓
+    R 2: 0.3547 ↓↓
+    R 3: 0.3404 ↓↓
+    R 4: 0.3132 ↓↓
+    R 5: 0.3009 ↓↓
+    R 6: 0.2920 ↓↓
+    R 7: 0.2863 ↓↓
+    R 8: 0.2649 ↓↓
+    R 9: 0.2517 ↓↓
+    R10: 0.2568 ↓↓
+    R11: 0.2344 ↓↓
+    R12: 0.2130 ↓↓
+    R13: 0.2032 ↓↓
+    R14: 0.2117 ↓↓
+    R15: 0.1823 ↓↓
+    R16: 0.1882 ↓↓
+    R17: 0.1785 ↓↓
+    R18: 0.1707 ↓↓
+    R19: 0.1642 ↓↓
+
+  Final: 0.1642, Best: 0.4020, Δ(final-R0): -0.2378, Time: 1591s
+
+======================================================================
+  Config 3: C=1.0 + lr=0.0001
+  4x less noise + gentle lr
+  Method: PAID-FD, 20 rounds, seed=42
+======================================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2905
+    Epoch 10/10: loss=1.7921
+  [Pre-training] Done.
+    Round   0/20: acc=0.3699, loss=3.5100, part=0.70
+    Round  10/20: acc=0.2341, loss=3.7909, part=0.70
+    Round  19/20: acc=0.1473, loss=3.9086, part=0.70
+
+  Round-by-round accuracy:
+    R 0: 0.3699 ← first distill
+    R 1: 0.3535
+    R 2: 0.3309 ↓↓
+    R 3: 0.3209 ↓↓
+    R 4: 0.3026 ↓↓
+    R 5: 0.2901 ↓↓
+    R 6: 0.2801 ↓↓
+    R 7: 0.2653 ↓↓
+    R 8: 0.2461 ↓↓
+    R 9: 0.2391 ↓↓
+    R10: 0.2341 ↓↓
+    R11: 0.2142 ↓↓
+    R12: 0.1938 ↓↓
+    R13: 0.1993 ↓↓
+    R14: 0.1873 ↓↓
+    R15: 0.1793 ↓↓
+    R16: 0.1664 ↓↓
+    R17: 0.1651 ↓↓
+    R18: 0.1583 ↓↓
+    R19: 0.1473 ↓↓
+
+  Final: 0.1473, Best: 0.3699, Δ(final-R0): -0.2226, Time: 1623s
+
+======================================================================
+  Config 4: λ×0.1 (higher ε regime)
+  Game produces ε≈2-5 instead of 0.3-0.8
+  Method: PAID-FD, 20 rounds, seed=42
+======================================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2905
+    Epoch 10/10: loss=1.7921
+  [Pre-training] Done.
+    Round   0/20: acc=0.3192, loss=3.1378, part=1.00
+    Round  10/20: acc=0.1495, loss=3.6718, part=1.00
+    Round  19/20: acc=0.0922, loss=3.8069, part=1.00
+
+  Round-by-round accuracy:
+    R 0: 0.3192 ← first distill
+    R 1: 0.2995
+    R 2: 0.2785 ↓↓
+    R 3: 0.2512 ↓↓
+    R 4: 0.2240 ↓↓
+    R 5: 0.1999 ↓↓
+    R 6: 0.1918 ↓↓
+    R 7: 0.1740 ↓↓
+    R 8: 0.1564 ↓↓
+    R 9: 0.1580 ↓↓
+    R10: 0.1495 ↓↓
+    R11: 0.1288 ↓↓
+    R12: 0.1340 ↓↓
+    R13: 0.1101 ↓↓
+    R14: 0.1070 ↓↓
+    R15: 0.1055 ↓↓
+    R16: 0.0901 ↓↓
+    R17: 0.0983 ↓↓
+    R18: 0.0904 ↓↓
+    R19: 0.0922 ↓↓
+
+  Final: 0.0922, Best: 0.3192, Δ(final-R0): -0.2270, Time: 2205s
+
+======================================================================
+  Config 5: λ×0.1 + C=1.0 + lr=0.0001
+  Higher ε + lower noise + gentle lr (best combo?)
+  Method: PAID-FD, 20 rounds, seed=42
+======================================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2905
+    Epoch 10/10: loss=1.7921
+  [Pre-training] Done.
+    Round   0/20: acc=0.3705, loss=3.4958, part=1.00
+    Round  10/20: acc=0.2220, loss=3.8130, part=1.00
+    Round  19/20: acc=0.1540, loss=3.9013, part=1.00
+
+  Round-by-round accuracy:
+    R 0: 0.3705 ← first distill
+    R 1: 0.3479 ↓↓
+    R 2: 0.3382 ↓↓
+    R 3: 0.3237 ↓↓
+    R 4: 0.3128 ↓↓
+    R 5: 0.3003 ↓↓
+    R 6: 0.2794 ↓↓
+    R 7: 0.2633 ↓↓
+    R 8: 0.2405 ↓↓
+    R 9: 0.2333 ↓↓
+    R10: 0.2220 ↓↓
+    R11: 0.2060 ↓↓
+    R12: 0.2039 ↓↓
+    R13: 0.1946 ↓↓
+    R14: 0.1810 ↓↓
+    R15: 0.1790 ↓↓
+    R16: 0.1772 ↓↓
+    R17: 0.1645 ↓↓
+    R18: 0.1543 ↓↓
+    R19: 0.1540 ↓↓
+
+  Final: 0.1540, Best: 0.3705, Δ(final-R0): -0.2165, Time: 2234s
+
+======================================================================
+  Config 6: FedMD oracle (no noise, v8 ceiling)
+  v8 FD without any noise — what's the best possible?
+  Method: FedMD, 20 rounds, seed=42
+======================================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [FedMD Pre-training] 10 epochs ...
+    Epoch 1/10
+    Epoch 5/10
+    Epoch 10/10
+  [FedMD Pre-training] Done.
+    Round   0/20: acc=0.3603, loss=2.5127, part=1.00
+    Round  10/20: acc=0.2232, loss=3.0887, part=1.00
+    Round  19/20: acc=0.1600, loss=3.3413, part=1.00
+
+  Round-by-round accuracy:
+    R 0: 0.3603 ← first distill
+    R 1: 0.3631 ↑
+    R 2: 0.3428
+    R 3: 0.3200 ↓↓
+    R 4: 0.3230 ↓↓
+    R 5: 0.2975 ↓↓
+    R 6: 0.2780 ↓↓
+    R 7: 0.2734 ↓↓
+    R 8: 0.2454 ↓↓
+    R 9: 0.2508 ↓↓
+    R10: 0.2232 ↓↓
+    R11: 0.2164 ↓↓
+    R12: 0.2034 ↓↓
+    R13: 0.1844 ↓↓
+    R14: 0.1721 ↓↓
+    R15: 0.1931 ↓↓
+    R16: 0.1787 ↓↓
+    R17: 0.1746 ↓↓
+    R18: 0.1680 ↓↓
+    R19: 0.1600 ↓↓
+
+  Final: 0.1600, Best: 0.3631, Δ(final-R0): -0.2003, Time: 2159s
+
+======================================================================
+  DIAGNOSTIC SUMMARY
+======================================================================
+  Config                                       R0  Final   Best       Δ
+  ---------------------------------------- ------ ------ ------ -------
+  C1: C=1.0 (halve sensitivity)            25.0%  7.5% 25.0% -17.5% ❌
+  C2: lr=0.0001 (10x smaller)              40.2% 16.4% 40.2% -23.8% ❌
+  C3: C=1.0 + lr=0.0001                    37.0% 14.7% 37.0% -22.3% ❌
+  C4: λ×0.1 (higher ε regime)              31.9%  9.2% 31.9% -22.7% ❌
+  C5: λ×0.1 + C=1.0 + lr=0.0001            37.0% 15.4% 37.0% -21.6% ❌
+  C6: FedMD oracle (no noise, v8 ceiling)  36.0% 16.0% 36.3% -20.0% ❌
+
+  Key: ✅ improving  ⚠️ stable  ❌ degrading
+  Pretrain baseline: ~44.4%
+  If ALL configs show ❌, the noise regime is fundamentally broken.
+  If Config 6 (FedMD) shows ❌, the v8 flow itself has a problem.
+
+✅ Saved to results/experiments/v8_phase0_diagnostic.json
+
+🏁 Diagnostic complete!
