@@ -377,6 +377,7 @@ def _create_method(method_name: str, model, config: dict, device: str):
             pretrain_lr=mc.get('pretrain_lr', 0.1),
             clip_bound=mc.get('clip_bound', 2.0),
             public_samples=mc.get('public_samples_per_round', 1000),
+            ce_anchor_alpha=mc.get('ce_anchor_alpha', 0.5),
             # v8 ablation flags
             use_blue=mc.get('use_blue', True),
             use_ldp=mc.get('use_ldp', True),
@@ -397,6 +398,7 @@ def _create_method(method_name: str, model, config: dict, device: str):
             clip_bound=mc.get('clip_bound', 2.0),
             participation_rate=mc.get('participation_rate', 1.0),
             samples_per_device=mc.get('samples_per_device', 100),
+            ce_anchor_alpha=mc.get('ce_anchor_alpha', 0.5),
         )
         return FixedEpsilon(m, cfg, 100, device)
     
@@ -419,6 +421,7 @@ def _create_method(method_name: str, model, config: dict, device: str):
             pretrain_epochs=mc.get('pretrain_epochs', 10),
             pretrain_lr=mc.get('pretrain_lr', 0.1),
             clip_bound=mc.get('clip_bound', 5.0),
+            ce_anchor_alpha=mc.get('ce_anchor_alpha', 0.5),
         )
         return FedMD(m, cfg, 100, device)
     

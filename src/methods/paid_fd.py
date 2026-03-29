@@ -1,24 +1,22 @@
 """
-PAID-FD v8: Privacy-Aware Incentive-Driven Federated Distillation
+PAID-FD v8.1: Privacy-Aware Incentive-Driven Federated Distillation
 =================================================================
 
 Standard FD flow (v8): Each round, participating devices receive a fresh
 copy of the current server model, train locally, upload noisy logits, and the
-server distills.  No persistent local models, no EMA buffer, no CE anchor.
+server distills.  No persistent local models, no EMA buffer.
 
-Key components retained:
+v8.1 fixes (from Phase 0.1 diagnostic):
+  - Fresh SGD optimizer each round (was: persistent Adam that leaked state)
+  - CE anchor loss: α*CE + (1-α)*KL (was: pure KL causing catastrophic drift)
+  - Public data labels used for CE anchor
+
+Key components:
   - Stackelberg game-based pricing (gamma -> price p* -> device decisions)
   - Per-device LDP: Lap(0, 2C/eps_i) on logits
   - BLUE aggregation: weights proportional to eps_i^2 (inverse-variance optimal)
   - Pre-training on public data
-  - Soft-label KL distillation with temperature T
-
-Why v8 (standard FD) instead of v7 (persistent models)?
-  - v7 persistent local models accumulate training across rounds, eventually
-    converging to ~60% regardless of gamma -- masking the game effect.
-  - v8 standard FD: each round distillation quality depends on THIS round
-    participants, so gamma (which controls participation) directly affects accuracy.
-  - This is also closer to the original FedMD paper protocol.
+  - CE-anchored soft-label KL distillation with temperature T
 """
 
 import torch
@@ -54,10 +52,11 @@ class PAIDFDConfig:
     local_lr: float = 0.01
     local_momentum: float = 0.9
 
-    # Distillation (pure KL, no CE anchor)
+    # Distillation (KL + CE anchor)
     distill_epochs: int = 1
     distill_lr: float = 0.001
     temperature: float = 3.0
+    ce_anchor_alpha: float = 0.5   # α: 0=pure KL, 1=pure CE, 0.5=balanced
 
     # Pre-training on public data
     pretrain_epochs: int = 10
@@ -102,9 +101,8 @@ class PAIDFD(FederatedMethod):
             budget=self.config.budget
         )
         self.energy_calc = EnergyCalculator()
-        self.distill_optimizer = torch.optim.Adam(
-            self.server_model.parameters(), lr=self.config.distill_lr
-        )
+        # v8.1: No persistent optimizer -- fresh SGD each round to prevent
+        # Adam state accumulation that caused monotonic degradation in v8.0
         self._pretrained = False
         self.privacy_spent = {}
         self.price_history = []
@@ -125,11 +123,14 @@ class PAIDFD(FederatedMethod):
         decisions = game_result["decisions"]
         self.price_history.append(price)
 
-        # Collect public images
+        # Collect public images AND labels (labels needed for CE anchor)
         public_images_list = []
+        public_labels_list = []
         for data, labels in public_loader:
             public_images_list.append(data)
+            public_labels_list.append(labels)
         public_images = torch.cat(public_images_list, dim=0)
+        public_labels = torch.cat(public_labels_list, dim=0)
         n_public = len(public_images)
 
         all_logits = []
@@ -220,7 +221,8 @@ class PAIDFD(FederatedMethod):
 
             T = self.config.temperature
             teacher_probs = F.softmax(aggregated / T, dim=1)
-            self._distill_to_server(teacher_probs, public_images[:min_len])
+            self._distill_to_server(teacher_probs, public_images[:min_len],
+                                    public_labels[:min_len])
 
             for dev_id, eps in zip(participants, eps_list):
                 self.privacy_spent[dev_id] = self.privacy_spent.get(dev_id, 0) + eps
@@ -289,15 +291,29 @@ class PAIDFD(FederatedMethod):
                       f"loss={epoch_loss/n_batches:.4f}")
         print(f"  [Pre-training] Done.")
 
-    def _distill_to_server(self, teacher_probs, public_images):
-        """Pure KL distillation from aggregated teacher probs to server model."""
+    def _distill_to_server(self, teacher_probs, public_images, public_labels=None):
+        """v8.1: CE-anchored KL distillation.
+
+        Loss = α * CE(model, true_labels) + (1-α) * KL(model || teacher) * T²
+
+        v8.0 bug fix: fresh SGD optimizer each round (no Adam state leak).
+        CE anchor prevents catastrophic drift from pretrained representation.
+        """
         self.server_model.train()
-        optimizer = self.distill_optimizer
+        # v8.1: Fresh optimizer each round — no state accumulation
+        optimizer = torch.optim.SGD(
+            self.server_model.parameters(),
+            lr=self.config.distill_lr,
+            momentum=0.9,
+            weight_decay=5e-4
+        )
         T = self.config.temperature
+        alpha = self.config.ce_anchor_alpha
         augment = transforms.Compose([
             transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
             transforms.RandomHorizontalFlip(),
         ])
+        ce_criterion = nn.CrossEntropyLoss()
         n_target = min(len(teacher_probs), len(public_images))
         batch_size = 256
         for epoch in range(self.config.distill_epochs):
@@ -308,11 +324,22 @@ class PAIDFD(FederatedMethod):
                 data = augment(public_images[idx]).to(self.device)
                 target_probs = teacher_probs[idx].to(self.device)
                 student_logits = self.server_model(data)
-                loss = F.kl_div(
+
+                # KL distillation loss
+                loss_kl = F.kl_div(
                     F.log_softmax(student_logits / T, dim=1),
                     target_probs,
                     reduction='batchmean'
                 ) * (T * T)
+
+                # CE anchor loss (ground truth on public data)
+                if alpha > 0 and public_labels is not None:
+                    labels = public_labels[idx].to(self.device)
+                    loss_ce = ce_criterion(student_logits, labels)
+                    loss = alpha * loss_ce + (1.0 - alpha) * loss_kl
+                else:
+                    loss = loss_kl
+
                 optimizer.zero_grad()
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.server_model.parameters(), 5.0)

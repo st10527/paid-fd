@@ -1,9 +1,11 @@
 """
-FedMD v8: Noise-free Federated Distillation baseline.
+FedMD v8.1: Noise-free Federated Distillation baseline.
 
 Standard FD flow (v8): Each round, ALL devices get a fresh copy of the
 server model, train locally, upload clean (no noise) logits, server
-distills via KL.  No persistent local models, no EMA, no CE anchor.
+distills via CE-anchored KL.  No persistent local models, no EMA.
+
+v8.1 fixes: Fresh SGD per round + CE anchor (same as PAID-FD v8.1).
 
 This is the noise-free FD oracle -- upper bound for FD methods.
 The ONLY differences vs PAID-FD are:
@@ -34,6 +36,7 @@ class FedMDConfig:
     distill_epochs: int = 5
     distill_lr: float = 0.001
     temperature: float = 3.0
+    ce_anchor_alpha: float = 0.5
     pretrain_epochs: int = 10
     pretrain_lr: float = 0.1
     clip_bound: float = 5.0
@@ -58,9 +61,7 @@ class FedMD(FederatedMethod):
         super().__init__(server_model, n_classes, device)
         self.config = config or FedMDConfig()
         self.energy_calc = EnergyCalculator()
-        self.distill_optimizer = torch.optim.Adam(
-            self.server_model.parameters(), lr=self.config.distill_lr
-        )
+        # v8.1: No persistent optimizer (fresh SGD each round)
         self._pretrained = False
 
     def run_round(self, round_idx, devices, client_loaders, public_loader,
@@ -72,11 +73,14 @@ class FedMD(FederatedMethod):
             self._pretrain_on_public(public_loader)
             self._pretrained = True
 
-        # Collect public images
+        # Collect public images AND labels
         public_images_list = []
-        for data, _ in public_loader:
+        public_labels_list = []
+        for data, labels in public_loader:
             public_images_list.append(data)
+            public_labels_list.append(labels)
         public_images = torch.cat(public_images_list, dim=0)
+        public_labels = torch.cat(public_labels_list, dim=0)
         n_public = len(public_images)
 
         C = self.config.clip_bound
@@ -141,7 +145,8 @@ class FedMD(FederatedMethod):
             aggregated = sum(l[:min_len] for l in all_logits) / N
             T = self.config.temperature
             teacher_probs = F.softmax(aggregated / T, dim=1)
-            self._distill_to_server(teacher_probs, public_images[:min_len])
+            self._distill_to_server(teacher_probs, public_images[:min_len],
+                                    public_labels[:min_len])
 
         # Evaluate
         accuracy = 0.0
@@ -197,15 +202,22 @@ class FedMD(FederatedMethod):
                 print(f"    Epoch {epoch+1}/{self.config.pretrain_epochs}")
         print(f"  [FedMD Pre-training] Done.")
 
-    def _distill_to_server(self, teacher_probs, public_images):
-        """Pure KL distillation."""
+    def _distill_to_server(self, teacher_probs, public_images, public_labels=None):
+        """v8.1: CE-anchored KL distillation with fresh optimizer."""
         self.server_model.train()
-        optimizer = self.distill_optimizer
+        optimizer = torch.optim.SGD(
+            self.server_model.parameters(),
+            lr=self.config.distill_lr,
+            momentum=0.9,
+            weight_decay=5e-4
+        )
         T = self.config.temperature
+        alpha = self.config.ce_anchor_alpha
         augment = transforms.Compose([
             transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
             transforms.RandomHorizontalFlip(),
         ])
+        ce_criterion = nn.CrossEntropyLoss()
         n_target = min(len(teacher_probs), len(public_images))
         batch_size = 256
         for epoch in range(self.config.distill_epochs):
@@ -216,11 +228,20 @@ class FedMD(FederatedMethod):
                 data = augment(public_images[idx]).to(self.device)
                 target_probs = teacher_probs[idx].to(self.device)
                 student_logits = self.server_model(data)
-                loss = F.kl_div(
+
+                loss_kl = F.kl_div(
                     F.log_softmax(student_logits / T, dim=1),
                     target_probs,
                     reduction='batchmean'
                 ) * (T * T)
+
+                if alpha > 0 and public_labels is not None:
+                    labels = public_labels[idx].to(self.device)
+                    loss_ce = ce_criterion(student_logits, labels)
+                    loss = alpha * loss_ce + (1.0 - alpha) * loss_kl
+                else:
+                    loss = loss_kl
+
                 optimizer.zero_grad()
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.server_model.parameters(), 5.0)
