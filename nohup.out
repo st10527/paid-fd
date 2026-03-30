@@ -2456,3 +2456,367 @@ Done. Check results with:
 ✅ Saved to results/experiments/v8_phase0_diagnostic.json
 
 🏁 Diagnostic complete!
+Using device: cuda
+  GPU: NVIDIA GeForce RTX 5070 Ti
+
+Configs to test: [1, 2, 3, 4, 5, 6, 7, 8]
+Rounds: 20
+
+v8.2 hypothesis: class-conditional denoising makes pure KL viable
+SNR improvement: 20K samples / 100 classes = 200/class -> noise / sqrt(200)
+
+
+======================================================================
+  Config D1: v8.2 denoising + pure KL (gamma=5)
+  THE FIX: class-cond denoise, no CE anchor
+  Method: PAID-FD, 20 rounds, seed=42
+======================================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2905
+    Epoch 10/10: loss=1.7921
+  [Pre-training] Done.
+    Round   0/20: acc=0.3441, loss=2.7597, part=0.70
+    Round  10/20: acc=0.3080, loss=3.4034, part=0.70
+    Round  19/20: acc=0.2532, loss=3.5179, part=0.70
+
+  Round-by-round accuracy:
+    R 0: 0.3441 <- R1
+    R 1: 0.3506
+    R 2: 0.3489
+    R 3: 0.3444
+    R 4: 0.3409
+    R 5: 0.3316
+    R 6: 0.3323
+    R 7: 0.3249
+    R 8: 0.3192 v degraded
+    R 9: 0.3101 v degraded
+    R10: 0.3080 v degraded
+    R11: 0.2987 v degraded
+    R12: 0.2947 v degraded
+    R13: 0.2890 v degraded
+    R14: 0.2751 v degraded
+    R15: 0.2729 v degraded
+    R16: 0.2712 v degraded
+    R17: 0.2610 v degraded
+    R18: 0.2562 v degraded
+    R19: 0.2532 v degraded
+
+  Final: 0.2532, Best: 0.3506, delta: -0.0909, Time: 1579s
+
+======================================================================
+  Config D2: v8.2 denoising + pure KL (gamma=3)
+  Lower gamma = fewer participants = higher per-device noise
+  Method: PAID-FD, 20 rounds, seed=42
+======================================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2905
+    Epoch 10/10: loss=1.7921
+  [Pre-training] Done.
+    Round   0/20: acc=0.3398, loss=2.7700, part=0.38
+    Round  10/20: acc=0.2962, loss=3.4076, part=0.38
+    Round  19/20: acc=0.2406, loss=3.5323, part=0.38
+
+  Round-by-round accuracy:
+    R 0: 0.3398 <- R1
+    R 1: 0.3493
+    R 2: 0.3431
+    R 3: 0.3385
+    R 4: 0.3380
+    R 5: 0.3293
+    R 6: 0.3259
+    R 7: 0.3188 v degraded
+    R 8: 0.3096 v degraded
+    R 9: 0.3045 v degraded
+    R10: 0.2962 v degraded
+    R11: 0.2874 v degraded
+    R12: 0.2842 v degraded
+    R13: 0.2712 v degraded
+    R14: 0.2694 v degraded
+    R15: 0.2636 v degraded
+    R16: 0.2563 v degraded
+    R17: 0.2548 v degraded
+    R18: 0.2487 v degraded
+    R19: 0.2406 v degraded
+
+  Final: 0.2406, Best: 0.3493, delta: -0.0992, Time: 929s
+
+======================================================================
+  Config D3: v8.2 denoising + pure KL (gamma=10)
+  Higher gamma = more participants = lower noise
+  Method: PAID-FD, 20 rounds, seed=42
+======================================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2905
+    Epoch 10/10: loss=1.7921
+  [Pre-training] Done.
+    Round   0/20: acc=0.3402, loss=2.7624, part=1.00
+    Round  10/20: acc=0.3039, loss=3.4021, part=1.00
+    Round  19/20: acc=0.2448, loss=3.5000, part=1.00
+
+  Round-by-round accuracy:
+    R 0: 0.3402 <- R1
+    R 1: 0.3443
+    R 2: 0.3469
+    R 3: 0.3425
+    R 4: 0.3426
+    R 5: 0.3367
+    R 6: 0.3260
+    R 7: 0.3241
+    R 8: 0.3164 v degraded
+    R 9: 0.3123 v degraded
+    R10: 0.3039 v degraded
+    R11: 0.2957 v degraded
+    R12: 0.2859 v degraded
+    R13: 0.2772 v degraded
+    R14: 0.2763 v degraded
+    R15: 0.2717 v degraded
+    R16: 0.2637 v degraded
+    R17: 0.2607 v degraded
+    R18: 0.2577 v degraded
+    R19: 0.2448 v degraded
+
+  Final: 0.2448, Best: 0.3469, delta: -0.0954, Time: 2280s
+
+======================================================================
+  Config D4: v8.0 baseline (no denoise, no anchor, gamma=5)
+  Control: pure noisy KL, should still degrade
+  Method: PAID-FD, 20 rounds, seed=42
+======================================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2905
+    Epoch 10/10: loss=1.7921
+  [Pre-training] Done.
+    Round   0/20: acc=0.3932, loss=2.4274, part=0.70
+    Round  10/20: acc=0.3977, loss=2.8142, part=0.70
+    Round  19/20: acc=0.3874, loss=2.8958, part=0.70
+
+  Round-by-round accuracy:
+    R 0: 0.3932 <- R1
+    R 1: 0.3996
+    R 2: 0.4006
+    R 3: 0.4044 ^ improved
+    R 4: 0.4030
+    R 5: 0.4021
+    R 6: 0.4050 ^ improved
+    R 7: 0.4044 ^ improved
+    R 8: 0.4030
+    R 9: 0.3985
+    R10: 0.3977
+    R11: 0.3979
+    R12: 0.3955
+    R13: 0.3940
+    R14: 0.3912
+    R15: 0.3900
+    R16: 0.3924
+    R17: 0.3853
+    R18: 0.3861
+    R19: 0.3874
+
+  Final: 0.3874, Best: 0.4050, delta: -0.0058, Time: 1595s
+
+======================================================================
+  Config D5: v8.1 CE anchor alpha=0.5 (no denoise, gamma=5)
+  CE-propped baseline from v8.1
+  Method: PAID-FD, 20 rounds, seed=42
+======================================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2905
+    Epoch 10/10: loss=1.7921
+  [Pre-training] Done.
+    Round   0/20: acc=0.4341, loss=2.1562, part=0.70
+    Round  10/20: acc=0.4455, loss=2.2213, part=0.70
+    Round  19/20: acc=0.4500, loss=2.2082, part=0.70
+
+  Round-by-round accuracy:
+    R 0: 0.4341 <- R1
+    R 1: 0.4343
+    R 2: 0.4397
+    R 3: 0.4387
+    R 4: 0.4414
+    R 5: 0.4435
+    R 6: 0.4440
+    R 7: 0.4418
+    R 8: 0.4449 ^ improved
+    R 9: 0.4439
+    R10: 0.4455 ^ improved
+    R11: 0.4474 ^ improved
+    R12: 0.4459 ^ improved
+    R13: 0.4468 ^ improved
+    R14: 0.4452 ^ improved
+    R15: 0.4475 ^ improved
+    R16: 0.4495 ^ improved
+    R17: 0.4478 ^ improved
+    R18: 0.4505 ^ improved
+    R19: 0.4500 ^ improved
+
+  Final: 0.4500, Best: 0.4505, delta: +0.0159, Time: 1596s
+
+======================================================================
+  Config D6: v8.2 denoise + CE anchor alpha=0.3 (gamma=5)
+  Belt+suspenders: denoising AND CE anchor
+  Method: PAID-FD, 20 rounds, seed=42
+======================================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2905
+    Epoch 10/10: loss=1.7921
+  [Pre-training] Done.
+    Round   0/20: acc=0.4020, loss=2.3697, part=0.70
+    Round  10/20: acc=0.4325, loss=2.6322, part=0.70
+    Round  19/20: acc=0.4342, loss=2.6380, part=0.70
+
+  Round-by-round accuracy:
+    R 0: 0.4020 <- R1
+    R 1: 0.4096
+    R 2: 0.4155 ^ improved
+    R 3: 0.4202 ^ improved
+    R 4: 0.4255 ^ improved
+    R 5: 0.4264 ^ improved
+    R 6: 0.4272 ^ improved
+    R 7: 0.4283 ^ improved
+    R 8: 0.4312 ^ improved
+    R 9: 0.4291 ^ improved
+    R10: 0.4325 ^ improved
+    R11: 0.4306 ^ improved
+    R12: 0.4303 ^ improved
+    R13: 0.4308 ^ improved
+    R14: 0.4290 ^ improved
+    R15: 0.4303 ^ improved
+    R16: 0.4343 ^ improved
+    R17: 0.4307 ^ improved
+    R18: 0.4322 ^ improved
+    R19: 0.4342 ^ improved
+
+  Final: 0.4342, Best: 0.4343, delta: +0.0322, Time: 1597s
+
+======================================================================
+  Config D7: FedMD oracle (no noise, no denoise)
+  Upper bound: clean logits, pure KL
+  Method: FedMD, 20 rounds, seed=42
+======================================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [FedMD Pre-training] 10 epochs ...
+    Epoch 1/10
+    Epoch 5/10
+    Epoch 10/10
+  [FedMD Pre-training] Done.
+    Round   0/20: acc=0.4355, loss=2.1415, part=1.00
+    Round  10/20: acc=0.4189, loss=2.2856, part=1.00
+    Round  19/20: acc=0.4124, loss=2.3481, part=1.00
+
+  Round-by-round accuracy:
+    R 0: 0.4355 <- R1
+    R 1: 0.4351
+    R 2: 0.4345
+    R 3: 0.4334
+    R 4: 0.4302
+    R 5: 0.4284
+    R 6: 0.4234
+    R 7: 0.4255
+    R 8: 0.4212
+    R 9: 0.4214
+    R10: 0.4189
+    R11: 0.4152 v degraded
+    R12: 0.4158
+    R13: 0.4145 v degraded
+    R14: 0.4127 v degraded
+    R15: 0.4181
+    R16: 0.4124 v degraded
+    R17: 0.4145 v degraded
+    R18: 0.4174
+    R19: 0.4124 v degraded
+
+  Final: 0.4124, Best: 0.4355, delta: -0.0231, Time: 2171s
+
+======================================================================
+  Config D8: FedMD oracle + denoising
+  Sanity: denoising on clean logits (should ≈ D7)
+  Method: FedMD, 20 rounds, seed=42
+======================================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [FedMD Pre-training] 10 epochs ...
+    Epoch 1/10
+    Epoch 5/10
+    Epoch 10/10
+  [FedMD Pre-training] Done.
+    Round   0/20: acc=0.4022, loss=2.3591, part=1.00
+    Round  10/20: acc=0.3292, loss=2.8799, part=1.00
+    Round  19/20: acc=0.2878, loss=3.0469, part=1.00
+
+  Round-by-round accuracy:
+    R 0: 0.4022 <- R1
+    R 1: 0.3947
+    R 2: 0.3926
+    R 3: 0.3851
+    R 4: 0.3776 v degraded
+    R 5: 0.3702 v degraded
+    R 6: 0.3589 v degraded
+    R 7: 0.3550 v degraded
+    R 8: 0.3432 v degraded
+    R 9: 0.3375 v degraded
+    R10: 0.3292 v degraded
+    R11: 0.3208 v degraded
+    R12: 0.3127 v degraded
+    R13: 0.3072 v degraded
+    R14: 0.3073 v degraded
+    R15: 0.3072 v degraded
+    R16: 0.2982 v degraded
+    R17: 0.2992 v degraded
+    R18: 0.2989 v degraded
+    R19: 0.2878 v degraded
+
+  Final: 0.2878, Best: 0.4022, delta: -0.1144, Time: 2172s
+
+===========================================================================
+  v8.2 DENOISING VERIFICATION SUMMARY
+===========================================================================
+  Config                                               R1  Final   Best   Delta
+  ------------------------------------------------ ------ ------ ------ -------
+  D1: v8.2 denoising + pure KL (gamma=5)            34.4%  25.3%  35.1%  -9.1% X
+  D2: v8.2 denoising + pure KL (gamma=3)            34.0%  24.1%  34.9%  -9.9% X
+  D3: v8.2 denoising + pure KL (gamma=10)           34.0%  24.5%  34.7%  -9.5% X
+  D4: v8.0 baseline (no denoise, no anchor, gamma=  39.3%  38.7%  40.5%  -0.6% ~
+  D5: v8.1 CE anchor alpha=0.5 (no denoise, gamma=  43.4%  45.0%  45.1%  +1.6% OK
+  D6: v8.2 denoise + CE anchor alpha=0.3 (gamma=5)  40.2%  43.4%  43.4%  +3.2% OK
+  D7: FedMD oracle (no noise, no denoise)           43.5%  41.2%  43.5%  -2.3% X
+  D8: FedMD oracle + denoising                      40.2%  28.8%  40.2% -11.4% X
+
+  Interpretation guide:
+    D1 > D4: Denoising helps (core hypothesis)
+    D1 > D5: Denoising > CE anchor (correct fix > band-aid)
+    D2 < D1 < D3: GAMMA DIFFERENTIATION WORKS!
+    D7 ~ D8: Denoising no-op on clean logits (sanity)
+    D1 OK: Pure KL works with denoised teacher
+
+Saved to results/experiments/v8_2_phase0_verification.json
+
+v8.2 verification complete!
