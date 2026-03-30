@@ -2820,3 +2820,231 @@ SNR improvement: 20K samples / 100 classes = 200/class -> noise / sqrt(200)
 Saved to results/experiments/v8_2_phase0_verification.json
 
 v8.2 verification complete!
+Using device: cuda
+  GPU: NVIDIA GeForce RTX 5070 Ti
+
+Phase 0.3: Pure BLUE Gamma Sweep
+  Config: D4 (pure KL, no denoise, fresh SGD)
+  Gammas: [2, 3, 5, 7, 10]
+  Rounds: 100
+  Seed: 42
+
+  This is the cleanest test: does BLUE aggregation quality
+  alone create accuracy differentiation across gamma values?
+
+
+======================================================================
+  PAID-FD pure BLUE | gamma=2 | seed=42 | 100 rounds
+======================================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2905
+    Epoch 10/10: loss=1.7921
+  [Pre-training] Done.
+    Round   0/100: acc=0.4444, loss=2.0753, part=0.00
+    Round  10/100: acc=0.4444, loss=2.0753, part=0.00
+    Round  20/100: acc=0.4444, loss=2.0753, part=0.00
+    Round  30/100: acc=0.4444, loss=2.0753, part=0.00
+    Round  40/100: acc=0.4444, loss=2.0753, part=0.00
+    Round  50/100: acc=0.4444, loss=2.0753, part=0.00
+    Round  60/100: acc=0.4444, loss=2.0753, part=0.00
+    Round  70/100: acc=0.4444, loss=2.0753, part=0.00
+    Round  80/100: acc=0.4444, loss=2.0753, part=0.00
+    Round  90/100: acc=0.4444, loss=2.0753, part=0.00
+    Round  99/100: acc=0.4444, loss=2.0753, part=0.00
+
+  R1=0.4444  Final=0.4444  Best=0.4444 (R0)  Part=0%  Eps=0.000  Time=166s
+  Trajectory (every 10 rounds):
+    R  0: 0.4444
+    R 10: 0.4444
+    R 20: 0.4444
+    R 30: 0.4444
+    R 40: 0.4444
+    R 50: 0.4444
+    R 60: 0.4444
+    R 70: 0.4444
+    R 80: 0.4444
+    R 90: 0.4444
+    R 99: 0.4444 (final)
+
+======================================================================
+  PAID-FD pure BLUE | gamma=3 | seed=42 | 100 rounds
+======================================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2905
+    Epoch 10/10: loss=1.7921
+  [Pre-training] Done.
+    Round   0/100: acc=0.3900, loss=2.4362, part=0.38
+    Round  10/100: acc=0.3890, loss=2.8173, part=0.38
+    Round  20/100: acc=0.3771, loss=2.9067, part=0.38
+    Round  30/100: acc=0.3678, loss=2.9697, part=0.38
+    Round  40/100: acc=0.3598, loss=3.0156, part=0.38
+    Round  50/100: acc=0.3532, loss=3.0603, part=0.38
+    Round  60/100: acc=0.3485, loss=3.0916, part=0.38
+    Round  70/100: acc=0.3441, loss=3.1185, part=0.38
+    Round  80/100: acc=0.3387, loss=3.1149, part=0.38
+    Round  90/100: acc=0.3378, loss=3.1578, part=0.38
+    Round  99/100: acc=0.3369, loss=3.1684, part=0.38
+
+  R1=0.3900  Final=0.3369  Best=0.4010 (R4)  Part=38%  Eps=0.852  Time=4481s
+  Trajectory (every 10 rounds):
+    R  0: 0.3900
+    R 10: 0.3890
+    R 20: 0.3771
+    R 30: 0.3678
+    R 40: 0.3598
+    R 50: 0.3532
+    R 60: 0.3485
+    R 70: 0.3441
+    R 80: 0.3387
+    R 90: 0.3378
+    R 99: 0.3369 (final)
+
+======================================================================
+  PAID-FD pure BLUE | gamma=5 | seed=42 | 100 rounds
+======================================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2905
+    Epoch 10/10: loss=1.7921
+  [Pre-training] Done.
+    Round   0/100: acc=0.3932, loss=2.4274, part=0.70
+    Round  10/100: acc=0.3977, loss=2.8142, part=0.70
+    Round  20/100: acc=0.3824, loss=2.8758, part=0.70
+    Round  30/100: acc=0.3757, loss=2.9492, part=0.70
+    Round  40/100: acc=0.3672, loss=2.9905, part=0.70
+    Round  50/100: acc=0.3610, loss=3.0268, part=0.70
+    Round  60/100: acc=0.3551, loss=3.0708, part=0.70
+    Round  70/100: acc=0.3491, loss=3.0863, part=0.70
+    Round  80/100: acc=0.3480, loss=3.1175, part=0.70
+    Round  90/100: acc=0.3450, loss=3.1293, part=0.70
+    Round  99/100: acc=0.3451, loss=3.1530, part=0.70
+
+  R1=0.3932  Final=0.3451  Best=0.4050 (R6)  Part=70%  Eps=0.524  Time=7828s
+  Trajectory (every 10 rounds):
+    R  0: 0.3932
+    R 10: 0.3977
+    R 20: 0.3824
+    R 30: 0.3757
+    R 40: 0.3672
+    R 50: 0.3610
+    R 60: 0.3551
+    R 70: 0.3491
+    R 80: 0.3480
+    R 90: 0.3450
+    R 99: 0.3451 (final)
+
+======================================================================
+  PAID-FD pure BLUE | gamma=7 | seed=42 | 100 rounds
+======================================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2905
+    Epoch 10/10: loss=1.7921
+  [Pre-training] Done.
+    Round   0/100: acc=0.3901, loss=2.4364, part=0.86
+    Round  10/100: acc=0.4032, loss=2.8230, part=0.86
+    Round  20/100: acc=0.3877, loss=2.8662, part=0.86
+    Round  30/100: acc=0.3722, loss=2.9711, part=0.86
+    Round  40/100: acc=0.3630, loss=2.9970, part=0.86
+    Round  50/100: acc=0.3546, loss=3.0361, part=0.86
+    Round  60/100: acc=0.3540, loss=3.0556, part=0.86
+    Round  70/100: acc=0.3459, loss=3.0908, part=0.86
+    Round  80/100: acc=0.3465, loss=3.1164, part=0.86
+    Round  90/100: acc=0.3383, loss=3.1338, part=0.86
+    Round  99/100: acc=0.3309, loss=3.1555, part=0.86
+
+  R1=0.3901  Final=0.3309  Best=0.4047 (R6)  Part=86%  Eps=0.408  Time=9486s
+  Trajectory (every 10 rounds):
+    R  0: 0.3901
+    R 10: 0.4032
+    R 20: 0.3877
+    R 30: 0.3722
+    R 40: 0.3630
+    R 50: 0.3546
+    R 60: 0.3540
+    R 70: 0.3459
+    R 80: 0.3465
+    R 90: 0.3383
+    R 99: 0.3309 (final)
+
+======================================================================
+  PAID-FD pure BLUE | gamma=10 | seed=42 | 100 rounds
+======================================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2905
+    Epoch 10/10: loss=1.7921
+  [Pre-training] Done.
+    Round   0/100: acc=0.3886, loss=2.4429, part=1.00
+    Round  10/100: acc=0.3955, loss=2.8118, part=1.00
+    Round  20/100: acc=0.3828, loss=2.8961, part=1.00
+    Round  30/100: acc=0.3724, loss=2.9603, part=1.00
+    Round  40/100: acc=0.3669, loss=3.0186, part=1.00
+    Round  50/100: acc=0.3573, loss=3.0472, part=1.00
+    Round  60/100: acc=0.3562, loss=3.0809, part=1.00
+    Round  70/100: acc=0.3472, loss=3.1203, part=1.00
+    Round  80/100: acc=0.3463, loss=3.1343, part=1.00
+    Round  90/100: acc=0.3474, loss=3.1574, part=1.00
+    Round  99/100: acc=0.3424, loss=3.1597, part=1.00
+
+  R1=0.3886  Final=0.3424  Best=0.4014 (R4)  Part=100%  Eps=0.322  Time=10917s
+  Trajectory (every 10 rounds):
+    R  0: 0.3886
+    R 10: 0.3955
+    R 20: 0.3828
+    R 30: 0.3724
+    R 40: 0.3669
+    R 50: 0.3573
+    R 60: 0.3562
+    R 70: 0.3472
+    R 80: 0.3463
+    R 90: 0.3474
+    R 99: 0.3424 (final)
+
+===========================================================================
+  PHASE 0.3: PURE BLUE GAMMA SWEEP — SUMMARY
+  (D4 config: pure KL, no denoise, fresh SGD, 100 rounds, seed=42)
+===========================================================================
+  Config           R1  Final   Best   Delta  Part   Eps   Time
+  --------------------------------------------------------------------
+  gamma=2       44.4%  44.4%  44.4%  +0.0%    0% 0.000   166s ~
+  gamma=3       39.0%  33.7%  40.1%  -5.3%   38% 0.852  4481s -
+  gamma=5       39.3%  34.5%  40.5%  -4.8%   70% 0.524  7828s -
+  gamma=7       39.0%  33.1%  40.5%  -5.9%   86% 0.408  9486s -
+  gamma=10      38.9%  34.2%  40.1%  -4.6%  100% 0.322 10917s -
+
+  GAMMA DIFFERENTIATION (excluding 0%% participation):
+    Final accuracy gap: 1.4% (gamma=5=34.5% vs gamma=7=33.1%)
+    Best accuracy gap:  0.8% (gamma=5=34.5% vs gamma=3=33.7%)
+
+  VERDICT: Gap 1-3%% — marginal effect
+  Consider: More rounds? Multi-seed? Or accept CE anchor (Option A)
+
+  Monotonicity (higher gamma -> higher accuracy): NO
+    gamma=3: final=33.69%
+    gamma=5: final=34.51%
+    gamma=7: final=33.09%
+    gamma=10: final=34.24%
+
+  Total time: 32888 seconds (9.1 hours)
+
+  Saved to results/experiments/v8_3_phase0_gamma_sweep.json
+
+Phase 0.3 complete!
