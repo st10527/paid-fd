@@ -76,7 +76,7 @@ class DeviceBestResponse:
             s_max: Maximum upload volume
         """
         self.delta = delta
-        self.eps_max = eps_max
+        self.eps_max = eps_max  # Root 2 of cubic can reach ε*≈8+
         self.s_max = s_max
         self.qf = QualityFunction()
     
@@ -109,8 +109,8 @@ class DeviceBestResponse:
         # NOTE: The cubic uses raw (p, λ) rather than (p/c, λ/c).
         # This is a modelling simplification where the ε-optimal condition
         # is decoupled from c.  The s* formula then uses c correctly.
-        # See docs/04_discussion_issues.md for detailed analysis.
-        eps_star = self._solve_cubic_bisection(p, lambda_i)
+        # When two positive roots exist, we select the one maximizing utility.
+        eps_star = self._solve_cubic_bisection(p, lambda_i, c)
         
         if eps_star is None or eps_star <= 0:
             return self._non_participation(device_id)
@@ -146,10 +146,11 @@ class DeviceBestResponse:
     def _solve_cubic_bisection(
         self,
         p: float,
-        lambda_i: float
+        lambda_i: float,
+        c: float = 1.0
     ) -> Optional[float]:
         """
-        Solve cubic equation using bisection:
+        Solve cubic equation for optimal ε*:
         
         f(ε) = λε³ + λε² + (1-p)ε + 1 = 0
         
@@ -157,56 +158,130 @@ class DeviceBestResponse:
         ε-optimal condition (c only appears in the s* formula).  The full
         FOC-derived cubic would be (λ/c)ε³ + (λ/c)ε² + (1-p/c)ε + 1 = 0,
         but with typical c ≈ 0.1-0.4 this produces ε* < 0.1 (impractical
-        for LDP).  The simplified form yields ε* ≈ 0.3-0.8 which balances
-        privacy and utility.
+        for LDP).  The simplified form yields ε* ≈ 2-8 which provides
+        workable SNR for federated distillation.
         
-        For p > 1, there exists exactly one positive root.
+        For p > 1, the cubic can have TWO positive roots. The smaller root
+        is a local minimum of device utility (saddle point of FOC), while
+        the larger root is the global maximum. We find ALL positive roots
+        and return the one that maximizes device utility.
         
         Returns:
-            Positive root ε*, or None if not found
+            Positive root ε* that maximizes utility, or None if not found
         """
         def f(eps):
             return lambda_i * eps**3 + lambda_i * eps**2 + (1 - p) * eps + 1
         
-        # For p > 1, f(0+) ≈ 1 > 0
-        # f has a local minimum, then increases to infinity
-        # We need to find where f first becomes negative
+        # Use numpy to find all roots of the cubic analytically
+        # Coefficients: λε³ + λε² + (1-p)ε + 1 = 0
+        coeffs = [lambda_i, lambda_i, (1 - p), 1]
         
-        eps_lo = self.delta
-        f_lo = f(eps_lo)
+        try:
+            all_roots = np.roots(coeffs)
+        except Exception:
+            return self._solve_cubic_bisection_fallback(p, lambda_i)
         
-        if f_lo < 0:
-            # Already negative at lower bound - shouldn't happen for typical params
+        # Filter for real, positive roots
+        positive_roots = []
+        for root in all_roots:
+            if np.isreal(root):
+                real_root = float(np.real(root))
+                if real_root > self.delta:
+                    # Verify it's actually a root (numerical precision)
+                    if abs(f(real_root)) < 1e-6:
+                        positive_roots.append(real_root)
+        
+        if not positive_roots:
             return None
         
-        # Search for where f becomes negative
-        eps_hi = self.delta
-        f_hi = f_lo
+        if len(positive_roots) == 1:
+            return positive_roots[0]
         
-        # Exponential search to find upper bound where f < 0
-        while eps_hi < 1000:
-            eps_hi = min(eps_hi * 2, 1000)
-            f_hi = f(eps_hi)
-            if f_hi < 0:
-                break
+        # Multiple positive roots: pick the one maximizing device utility
+        # U_i = p * q(s, ε) - c*s - λ*ε, where s* = p/c - (1+ε)/ε
+        best_eps = None
+        best_utility = -float('inf')
         
-        if f_hi >= 0:
-            # f never becomes negative - no positive root in range
-            # This can happen when lambda is too large relative to p
-            return None
+        for eps in positive_roots:
+            s = p / c - (1 + eps) / eps
+            if s <= 0:
+                continue
+            s = min(s, self.s_max)
+            quality = self.qf.q(s, eps)
+            utility = p * quality - c * s - lambda_i * eps
+            if utility > best_utility:
+                best_utility = utility
+                best_eps = eps
         
-        # Now we have f(eps_lo) > 0 and f(eps_hi) < 0
-        # Bisection to find the root
-        while eps_hi - eps_lo > self.delta:
-            eps_mid = (eps_lo + eps_hi) / 2
-            f_mid = f(eps_mid)
-            
-            if f_mid > 0:
-                eps_lo = eps_mid
-            else:
-                eps_hi = eps_mid
+        return best_eps
+    
+    def _solve_cubic_bisection_fallback(
+        self,
+        p: float,
+        lambda_i: float
+    ) -> Optional[float]:
+        """
+        Fallback bisection solver: finds the LARGEST positive root.
         
-        return (eps_lo + eps_hi) / 2
+        Strategy: scan from a large upper bound downward to find where
+        f transitions from positive to negative (the larger root).
+        """
+        def f(eps):
+            return lambda_i * eps**3 + lambda_i * eps**2 + (1 - p) * eps + 1
+        
+        # For the cubic with positive leading coefficient,
+        # f(ε) → +∞ as ε → +∞. Between the two roots, f < 0.
+        # So scanning from right: f > 0, then f < 0 at Root 2, then f > 0 at Root 1.
+        # We want the transition from f < 0 to f > 0 coming from the right = Root 2.
+        
+        # Find upper bound where f is definitely positive (beyond all roots)
+        eps_upper = max(p / lambda_i, 100.0) if lambda_i > 0 else 100.0
+        while f(eps_upper) < 0:
+            eps_upper *= 2
+        
+        # Scan downward to find where f becomes negative
+        eps_test = eps_upper
+        while eps_test > self.delta:
+            eps_test /= 2
+            if f(eps_test) < 0:
+                # Found region where f < 0. The larger root is between
+                # eps_test and eps_upper (where f went from negative to positive)
+                eps_lo = eps_test
+                eps_hi = eps_upper
+                
+                # But eps_upper might be too far. Narrow it.
+                while f(eps_hi) > 0 and eps_hi > eps_test * 2:
+                    eps_hi /= 1.5
+                if f(eps_hi) <= 0:
+                    eps_hi = eps_upper
+                
+                # Bisect for the larger root (f goes from - to +)
+                # Actually we need the right boundary where f transitions from <0 to >0
+                # eps_lo: f < 0, eps_hi: f > 0 (already at eps_upper)
+                # But we need a tighter bracket. Search upward from eps_lo.
+                eps_bracket_lo = eps_lo
+                eps_bracket_hi = eps_upper
+                
+                # Find tighter upper bound
+                probe = eps_lo * 2
+                while probe < eps_bracket_hi:
+                    if f(probe) >= 0:
+                        eps_bracket_hi = probe
+                        break
+                    eps_bracket_lo = probe
+                    probe *= 1.5
+                
+                # Now bisect: f(eps_bracket_lo) < 0, f(eps_bracket_hi) > 0
+                while eps_bracket_hi - eps_bracket_lo > self.delta:
+                    mid = (eps_bracket_lo + eps_bracket_hi) / 2
+                    if f(mid) < 0:
+                        eps_bracket_lo = mid
+                    else:
+                        eps_bracket_hi = mid
+                
+                return (eps_bracket_lo + eps_bracket_hi) / 2
+        
+        return None
     
     def _non_participation(self, device_id: int) -> DeviceDecision:
         """Return a non-participating decision."""
