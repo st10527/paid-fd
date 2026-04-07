@@ -3288,3 +3288,268 @@ Using device: cuda
   Saved to results/experiments/v9_0_phase0_gamma_sweep_fixed_solver.json
 
 v9.0 sweep complete!
+Using device: cuda
+  GPU: NVIDIA GeForce RTX 5070 Ti
+
+======================================================================
+  v9.1: Distillation Hyperparameter Fix
+======================================================================
+
+  Problem: C=2,T=3 -> teacher signal near-uniform (1.93%% vs 1%% uniform)
+  Fix: C=5,T=1 -> teacher signal strong (32.5%% vs 1%% uniform)
+
+  Configs: ['D1_C2_T3_g5', 'D2_C5_T1_g5', 'D3_C5_T2_g5', 'D4_C5_T1_CE_g5', 'D5_C2_T1_g5', 'D6_C5_T3_g5', 'D7_C5_T1_g10', 'D8_C5_T1_g3']
+  Rounds: 50
+  Seed: 42
+
+
+======================================================================
+  D1_C2_T3_g5: C=2 T=3 (v9.0 baseline) | gamma=5 | 50 rounds
+======================================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2485
+    Epoch 10/10: loss=1.7248
+  [Pre-training] Done.
+    Round   0/50: acc=0.3902, loss=2.4214, part=0.82
+    Round  10/50: acc=0.4018, loss=2.7705, part=0.82
+    Round  20/50: acc=0.3910, loss=2.8288, part=0.82
+    Round  30/50: acc=0.3832, loss=2.8998, part=0.82
+    Round  40/50: acc=0.3749, loss=2.9601, part=0.82
+    Round  49/50: acc=0.3723, loss=2.9799, part=0.82
+
+  C=2 T=3 (v9.0 baseline)
+  R1=0.3902  Final=0.3723  Best=0.4051 (R5)  Part=82%  Eps=2.779  Time=4698s
+  Trajectory (every 10 rounds):
+    R  0: 0.3902
+    R 10: 0.4018
+    R 20: 0.3910
+    R 30: 0.3832
+    R 40: 0.3749
+    R 49: 0.3723 (final)
+
+======================================================================
+  D2_C5_T1_g5: C=5 T=1 (strong signal) | gamma=5 | 50 rounds
+======================================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2485
+    Epoch 10/10: loss=1.7248
+  [Pre-training] Done.
+    Round   0/50: acc=0.4240, loss=2.1689, part=0.82
+    Round  10/50: acc=0.4019, loss=2.4836, part=0.82
+    Round  20/50: acc=0.3929, loss=2.5152, part=0.82
+    Round  30/50: acc=0.3872, loss=2.5498, part=0.82
+    Round  40/50: acc=0.3832, loss=2.5834, part=0.82
+    Round  49/50: acc=0.3795, loss=2.5878, part=0.82
+
+  C=5 T=1 (strong signal)
+  R1=0.4240  Final=0.3795  Best=0.4240 (R0)  Part=82%  Eps=2.779  Time=4711s
+  Trajectory (every 10 rounds):
+    R  0: 0.4240
+    R 10: 0.4019
+    R 20: 0.3929
+    R 30: 0.3872
+    R 40: 0.3832
+    R 49: 0.3795 (final)
+
+======================================================================
+  D3_C5_T2_g5: C=5 T=2 (moderate) | gamma=5 | 50 rounds
+======================================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2485
+    Epoch 10/10: loss=1.7248
+  [Pre-training] Done.
+    Round   0/50: acc=0.4315, loss=2.1541, part=0.82
+    Round  10/50: acc=0.4154, loss=2.3152, part=0.82
+    Round  20/50: acc=0.4065, loss=2.3787, part=0.82
+    Round  30/50: acc=0.3981, loss=2.4285, part=0.82
+    Round  40/50: acc=0.3900, loss=2.4728, part=0.82
+    Round  49/50: acc=0.3869, loss=2.4889, part=0.82
+
+  C=5 T=2 (moderate)
+  R1=0.4315  Final=0.3869  Best=0.4315 (R0)  Part=82%  Eps=2.779  Time=4711s
+  Trajectory (every 10 rounds):
+    R  0: 0.4315
+    R 10: 0.4154
+    R 20: 0.4065
+    R 30: 0.3981
+    R 40: 0.3900
+    R 49: 0.3869 (final)
+
+======================================================================
+  D4_C5_T1_CE_g5: C=5 T=1 +CE anchor | gamma=5 | 50 rounds
+======================================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2485
+    Epoch 10/10: loss=1.7248
+  [Pre-training] Done.
+    Round   0/50: acc=0.4503, loss=2.0652, part=0.82
+    Round  10/50: acc=0.4443, loss=2.2051, part=0.82
+    Round  20/50: acc=0.4465, loss=2.2157, part=0.82
+    Round  30/50: acc=0.4478, loss=2.2188, part=0.82
+    Round  40/50: acc=0.4509, loss=2.2204, part=0.82
+    Round  49/50: acc=0.4519, loss=2.2175, part=0.82
+
+  C=5 T=1 +CE anchor
+  R1=0.4503  Final=0.4519  Best=0.4523 (R45)  Part=82%  Eps=2.779  Time=4717s
+  Trajectory (every 10 rounds):
+    R  0: 0.4503
+    R 10: 0.4443
+    R 20: 0.4465
+    R 30: 0.4478
+    R 40: 0.4509
+    R 49: 0.4519 (final)
+
+======================================================================
+  D5_C2_T1_g5: C=2 T=1 (only T fix) | gamma=5 | 50 rounds
+======================================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2485
+    Epoch 10/10: loss=1.7248
+  [Pre-training] Done.
+    Round   0/50: acc=0.3567, loss=2.5531, part=0.82
+    Round  10/50: acc=0.3662, loss=3.1430, part=0.82
+    Round  20/50: acc=0.3608, loss=3.1635, part=0.82
+    Round  30/50: acc=0.3549, loss=3.2101, part=0.82
+    Round  40/50: acc=0.3470, loss=3.2535, part=0.82
+    Round  49/50: acc=0.3421, loss=3.2607, part=0.82
+
+  C=2 T=1 (only T fix)
+  R1=0.3567  Final=0.3421  Best=0.3665 (R7)  Part=82%  Eps=2.779  Time=4712s
+  Trajectory (every 10 rounds):
+    R  0: 0.3567
+    R 10: 0.3662
+    R 20: 0.3608
+    R 30: 0.3549
+    R 40: 0.3470
+    R 49: 0.3421 (final)
+
+======================================================================
+  D6_C5_T3_g5: C=5 T=3 (only C fix) | gamma=5 | 50 rounds
+======================================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2485
+    Epoch 10/10: loss=1.7248
+  [Pre-training] Done.
+    Round   0/50: acc=0.4385, loss=2.1078, part=0.82
+    Round  10/50: acc=0.4260, loss=2.2452, part=0.82
+    Round  20/50: acc=0.4157, loss=2.3155, part=0.82
+    Round  30/50: acc=0.4070, loss=2.3650, part=0.82
+    Round  40/50: acc=0.4016, loss=2.4075, part=0.82
+    Round  49/50: acc=0.3959, loss=2.4245, part=0.82
+
+  C=5 T=3 (only C fix)
+  R1=0.4385  Final=0.3959  Best=0.4385 (R0)  Part=82%  Eps=2.779  Time=4709s
+  Trajectory (every 10 rounds):
+    R  0: 0.4385
+    R 10: 0.4260
+    R 20: 0.4157
+    R 30: 0.4070
+    R 40: 0.4016
+    R 49: 0.3959 (final)
+
+======================================================================
+  D7_C5_T1_g10: C=5 T=1 g=10 | gamma=10 | 50 rounds
+======================================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2485
+    Epoch 10/10: loss=1.7248
+  [Pre-training] Done.
+    Round   0/50: acc=0.4268, loss=2.1604, part=1.00
+    Round  10/50: acc=0.4037, loss=2.4874, part=1.00
+    Round  20/50: acc=0.3929, loss=2.5367, part=1.00
+    Round  30/50: acc=0.3908, loss=2.5385, part=1.00
+    Round  40/50: acc=0.3871, loss=2.5671, part=1.00
+    Round  49/50: acc=0.3818, loss=2.5733, part=1.00
+
+  C=5 T=1 g=10
+  R1=0.4268  Final=0.3818  Best=0.4268 (R0)  Part=100%  Eps=3.148  Time=5666s
+  Trajectory (every 10 rounds):
+    R  0: 0.4268
+    R 10: 0.4037
+    R 20: 0.3929
+    R 30: 0.3908
+    R 40: 0.3871
+    R 49: 0.3818 (final)
+
+======================================================================
+  D8_C5_T1_g3: C=5 T=1 g=3 | gamma=3 | 50 rounds
+======================================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2485
+    Epoch 10/10: loss=1.7248
+  [Pre-training] Done.
+    Round   0/50: acc=0.4271, loss=2.1593, part=0.38
+    Round  10/50: acc=0.3959, loss=2.5398, part=0.38
+    Round  20/50: acc=0.3874, loss=2.5563, part=0.38
+    Round  30/50: acc=0.3828, loss=2.5766, part=0.38
+    Round  40/50: acc=0.3751, loss=2.6128, part=0.38
+    Round  49/50: acc=0.3733, loss=2.6274, part=0.38
+
+  C=5 T=1 g=3
+  R1=0.4271  Final=0.3733  Best=0.4271 (R0)  Part=38%  Eps=2.831  Time=2346s
+  Trajectory (every 10 rounds):
+    R  0: 0.4271
+    R 10: 0.3959
+    R 20: 0.3874
+    R 30: 0.3828
+    R 40: 0.3751
+    R 49: 0.3733 (final)
+
+=====================================================================================
+  v9.1 DISTILLATION FIX SWEEP — SUMMARY
+  (50 rounds, seed=42)
+=====================================================================================
+  Config                  C    T   CE     R1  Final   Best   Delta  Part   Eps
+  --------------------------------------------------------------------------------
+  D1_C2_T3_g5             2    3  0.0  39.0%  37.2%  40.5%  -1.8%   82%  2.78 ~
+  D2_C5_T1_g5             5    1  0.0  42.4%  38.0%  42.4%  -4.4%   82%  2.78 -
+  D3_C5_T2_g5             5    2  0.0  43.1%  38.7%  43.1%  -4.5%   82%  2.78 -
+  D4_C5_T1_CE_g5          5    1  0.3  45.0%  45.2%  45.2%  +0.2%   82%  2.78 ~
+  D5_C2_T1_g5             2    1  0.0  35.7%  34.2%  36.6%  -1.5%   82%  2.78 ~
+  D6_C5_T3_g5             5    3  0.0  43.9%  39.6%  43.9%  -4.3%   82%  2.78 -
+  D7_C5_T1_g10            5    1  0.0  42.7%  38.2%  42.7%  -4.5%  100%  3.15 -
+  D8_C5_T1_g3             5    1  0.0  42.7%  37.3%  42.7%  -5.4%   38%  2.83 -
+
+  KEY COMPARISONS:
+    C=2,T=3 -> C=5,T=1: R1 39.0%->42.4%, Final 37.2%->38.0% (+0.7%)
+    C=2->5 (T=1 fixed): Final 34.2% -> 38.0% (+3.7%)
+    T=3->1 (C=5 fixed): Final 39.6% -> 38.0% (-1.6%)
+    Gamma differentiation (C=5,T=1): gap = 0.8% (D7_C5_T1_g10=38.2% vs D8_C5_T1_g3=37.3%)
+
+  Total time: 36283 seconds (10.1 hours)
+
+  Saved to results/experiments/v9_1_distill_fix.json
+
+v9.1 sweep complete!
