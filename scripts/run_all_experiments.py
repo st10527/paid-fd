@@ -378,6 +378,7 @@ def _create_method(method_name: str, model, config: dict, device: str):
             clip_bound=mc.get('clip_bound', 2.0),
             public_samples=mc.get('public_samples_per_round', 1000),
             ce_anchor_alpha=mc.get('ce_anchor_alpha', 0.0),
+            self_anchor_alpha=mc.get('self_anchor_alpha', 0.0),
             # v8 ablation flags
             use_blue=mc.get('use_blue', True),
             use_ldp=mc.get('use_ldp', True),
