@@ -1,23 +1,23 @@
 """
-PAID-FD v10: Persistent Local Models + Solver Fix
-===================================================
+PAID-FD v10.1: Persistent Local Models + Persistent Adam + Solver Fix
+======================================================================
 
-Return to persistent local models architecture (v7) with v9.0 solver fix.
+v10.0 -> v10.1: Restored persistent Adam distillation optimizer.
 
 Version history:
-  v7:   Persistent local models + EMA + mixed loss -> 60% accuracy
-        But used Adam (state leak) and old solver (eps*~0.5)
+  v7:   Persistent local models + EMA + mixed loss + persistent Adam -> 60%
+        But old solver (eps*~0.5)
   v8.x: Removed persistent -> "standard FD" -> self-referential problem
         Device logits ~ server + noise -> distillation learns nothing new
   v9.x: Solver fix works (eps*~3) but without persistent models,
         no real knowledge to transfer -> all configs degrade
-  v10:  Best of both worlds:
-        - Persistent local models (v7): devices accumulate real knowledge
-        - Fixed cubic solver (v9.0): eps* jumps from 0.5 to 3.0
-        - Fresh SGD per round (not Adam): no state leak
-        - EMA logit buffer: noise averaging across rounds
-        - Mixed loss: alpha*KL(teacher) + (1-alpha)*CE(ground truth)
-        - v9.2 diagnostics: pre/post distill acc, KL metrics
+  v10.0: Persistent models + solver fix + fresh SGD -> 47% (ceiling)
+        CE loss stagnated at ~2.08 for 100 rounds: fresh SGD with 78
+        batches/round couldn't accumulate enough gradient information.
+  v10.1: Restored persistent Adam from v7. The "Adam state leak" in v8
+        was actually self-referential learning from fresh models, not
+        Adam's state. With persistent local models, Adam's accumulated
+        m/v statistics denoise the gradient signal across rounds.
 
 Key insight: In standard FD with fresh copies, devices return w(t)+noise
 (self-referential). With persistent models, device i after 50 rounds has
@@ -34,7 +34,7 @@ Pipeline per round:
   3. Server: BLUE aggregation (eps^2-weighted)
   4. Server: EMA logit buffer (noise averaging across rounds)
   5. Server: softmax(buffer / T) -> teacher probs
-  6. Server: Mixed loss distillation (alpha*KL + (1-alpha)*CE) with fresh SGD
+  6. Server: Mixed loss distillation (alpha*KL + (1-alpha)*CE) with persistent Adam
 """
 
 import torch
@@ -103,12 +103,15 @@ class PAIDFDConfig:
 
 
 class PAIDFD(FederatedMethod):
-    """PAID-FD v10: Federated Distillation with Persistent Models + Game.
+    """PAID-FD v10.1: Federated Distillation with Persistent Models + Game.
 
     Key difference from v8/v9: devices maintain persistent local models
     across rounds. After R rounds with E local epochs each, device i has
     trained R*E epochs on its private data D_i. This creates genuine
     local knowledge that differs from the server model.
+
+    v10.1 fix: Restored persistent Adam for distillation (v7's key ingredient).
+    Fresh SGD in v10.0 caused CE loss to stagnate at ~2.08 (47% ceiling).
 
     Protocol per round:
       1. Server computes optimal price p* via Stackelberg game
@@ -121,7 +124,7 @@ class PAIDFD(FederatedMethod):
       4. Server: BLUE-weighted average of noisy logits
       5. Server: Update EMA logit buffer (noise averaging)
       6. Server: softmax(buffer / T) -> teacher probs
-      7. Server: Mixed loss distillation (alpha*KL + (1-alpha)*CE, fresh SGD)
+      7. Server: Mixed loss distillation (alpha*KL + (1-alpha)*CE, persistent Adam)
     """
 
     def __init__(self, server_model, config=None, n_classes=100, device=None):
@@ -143,7 +146,16 @@ class PAIDFD(FederatedMethod):
         # EMA logit buffer: accumulates aggregated logits across rounds
         self.logit_buffer = None
 
-        # v10: No persistent distillation optimizer (fresh SGD each round)
+        # Persistent distillation optimizer (maintains momentum across rounds)
+        # Adam's accumulated m/v statistics effectively denoise the gradient
+        # signal over many rounds — 78 batches/round × 100 rounds = 7800 updates.
+        # v8's "Adam state leak" was actually self-referential learning from
+        # fresh models, not Adam's state. With persistent local models, this is safe.
+        self.distill_optimizer = torch.optim.Adam(
+            self.server_model.parameters(),
+            lr=self.config.distill_lr
+        )
+
         self._pretrained = False
         self.privacy_spent = {}
         self.cumulative_payment = 0.0
@@ -410,12 +422,18 @@ class PAIDFD(FederatedMethod):
         return denoised
 
     def _distill_to_server(self, teacher_probs, public_images, public_labels=None):
-        """v10: Mixed loss distillation with fresh SGD.
+        """v10.1: Mixed loss distillation with persistent Adam.
 
         loss = alpha * KL(student || teacher) * T^2 + (1-alpha) * CE(student, labels)
 
-        Fresh SGD each round to avoid Adam state leak (v8.0 bug).
-        CE term provides ground-truth anchor; KL term transfers ensemble knowledge.
+        Persistent Adam across rounds: accumulated m/v statistics act as a
+        gradient denoiser. With only 78 batches/round (20k/256), fresh SGD
+        can't make meaningful CE progress -- CE loss stagnated at ~2.08 for
+        100 rounds in v10.0. Persistent Adam gave v7 60% accuracy.
+
+        The v8 "Adam state leak" was caused by self-referential learning
+        (fresh models), not by Adam's state. With persistent local models
+        providing genuine knowledge, optimizer persistence is safe.
 
         Returns:
             dict with diagnostic signals
@@ -426,12 +444,7 @@ class PAIDFD(FederatedMethod):
         diagnostics = {}
 
         self.server_model.train()
-        optimizer = torch.optim.SGD(
-            self.server_model.parameters(),
-            lr=self.config.distill_lr,
-            momentum=0.9,
-            weight_decay=5e-4
-        )
+        optimizer = self.distill_optimizer  # persistent Adam
         augment = transforms.Compose([
             transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
             transforms.RandomHorizontalFlip(),
@@ -500,6 +513,6 @@ def create_paid_fd(model_name="resnet18", n_classes=100, gamma=10.0,
     from ..models import get_model
     if device is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = get_model(model_name, n_classes=n_classes)
+    model = get_model(model_name, num_classes=n_classes)
     config = PAIDFDConfig(gamma=gamma, **config_kwargs)
     return PAIDFD(model, config, n_classes, device)
