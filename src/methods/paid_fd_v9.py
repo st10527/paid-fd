@@ -1,40 +1,36 @@
 """
-PAID-FD v10: Persistent Local Models + Solver Fix
-===================================================
+PAID-FD v9.2: Privacy-Aware Incentive-Driven Federated Distillation
+===================================================================
 
-Return to persistent local models architecture (v7) with v9.0 solver fix.
+Standard FD flow with self-anchor distillation to prevent noise drift.
 
 Version history:
-  v7:   Persistent local models + EMA + mixed loss -> 60% accuracy
-        But used Adam (state leak) and old solver (eps*~0.5)
-  v8.x: Removed persistent -> "standard FD" -> self-referential problem
-        Device logits ~ server + noise -> distillation learns nothing new
-  v9.x: Solver fix works (eps*~3) but without persistent models,
-        no real knowledge to transfer -> all configs degrade
-  v10:  Best of both worlds:
-        - Persistent local models (v7): devices accumulate real knowledge
-        - Fixed cubic solver (v9.0): eps* jumps from 0.5 to 3.0
-        - Fresh SGD per round (not Adam): no state leak
-        - EMA logit buffer: noise averaging across rounds
-        - Mixed loss: alpha*KL(teacher) + (1-alpha)*CE(ground truth)
-        - v9.2 diagnostics: pre/post distill acc, KL metrics
+  v8.0: Fresh copy per round + pure KL → catastrophic drift (ALL configs fail)
+  v8.1: Added CE anchor → masks the real problem (CE dominates, γ irrelevant)
+  v8.2: Class-conditional denoising → correct fix attempt
+  v9.0: Fixed cubic solver (two-root bug), game works but distill still degrades
+  v9.1: Swept C,T → degradation ∝ C (noise), not T. Only CE anchor stable.
+        Structural dilemma: CE anchor makes γ irrelevant.
+  v9.2: Self-anchor distillation (Route 2)
+        Before distillation, compute self_logits = server's own predictions.
+        Loss = α_sa × KL(noisy_teacher) + (1-α_sa) × KL(self_teacher)
+        No ground truth needed. Self-distillation prevents noise drift by
+        anchoring to server's own knowledge while still learning from teacher.
 
-Key insight: In standard FD with fresh copies, devices return w(t)+noise
-(self-referential). With persistent models, device i after 50 rounds has
-trained 250 epochs on D_i -- it has REAL local knowledge different from
-server. Distillation transfers ensemble knowledge, not noise.
-
-Theory: Persistent models don't change the privacy analysis (each round's
-logits are still clipped and noised independently). The game mechanism
-controls the quality-privacy tradeoff of these richer local models.
+Key insight (v9.2): The problem is not noise floor but noise DRIFT — each round
+of pure KL on noisy teacher gradually pushes the server away from what it already
+knows. Self-anchor provides "gravitational pull" back to server's own knowledge.
+Unlike CE anchor, self-anchor doesn't bypass the distillation pathway, so γ
+(which controls teacher signal quality) remains relevant.
 
 Pipeline per round:
-  1. Stackelberg game -> price p*, device decisions
-  2. Devices: persistent local model -> train on D_i -> clip logits -> LDP -> upload
-  3. Server: BLUE aggregation (eps^2-weighted)
-  4. Server: EMA logit buffer (noise averaging across rounds)
-  5. Server: softmax(buffer / T) -> teacher probs
-  6. Server: Mixed loss distillation (alpha*KL + (1-alpha)*CE) with fresh SGD
+  1. Stackelberg game → price p*, device decisions
+  2. Devices: fresh copy → local train → clip logits → LDP noise → upload
+  3. Server: BLUE aggregation (ε²-weighted)
+  4. Server: softmax(aggregated / T) → teacher probs
+  5. Server: Self-anchor KL distillation with fresh SGD
+     - Compute self_logits (server's current knowledge) before training
+     - loss = α_sa × KL(teacher) + (1-α_sa) × KL(self) [both scaled by T²]
 """
 
 import torch
@@ -55,17 +51,17 @@ from ..models.utils import copy_model
 
 @dataclass
 class PAIDFDConfig:
-    """Configuration for PAID-FD v10 (Persistent Models + Solver Fix).
+    """Configuration for PAID-FD v9.2 (Standard FD + Self-Anchor).
 
-    v10 pipeline: persistent local model -> local train -> clip -> LDP ->
-    BLUE -> EMA buffer -> softmax(T) -> mixed loss distill (fresh SGD).
+    v9.2 pipeline: fresh copy → local train → clip → LDP → BLUE →
+    softmax(T) → self-anchor KL distill (fresh SGD).
     """
     # Game parameters
     gamma: float = 10.0
     delta: float = 0.01
     budget: float = float('inf')
 
-    # Local training (persistent models -- accumulate across rounds)
+    # Local training (per round -- fresh copy each round)
     local_epochs: int = 5
     local_lr: float = 0.01
     local_momentum: float = 0.9
@@ -73,12 +69,12 @@ class PAIDFDConfig:
     # Distillation
     distill_epochs: int = 1
     distill_lr: float = 0.001
-    distill_alpha: float = 0.7  # alpha: weight on KL vs CE. alpha*KL + (1-alpha)*CE
     temperature: float = 3.0
-
-    # EMA logit buffer
-    ema_momentum: float = 0.9   # EMA for cross-round noise averaging
-                                 # effective window ~ 1/(1-0.9) = 10 rounds
+    ce_anchor_alpha: float = 0.0   # α_ce: 0=no CE anchor, >0 adds CE loss
+    self_anchor_alpha: float = 0.0 # α_sa: weight on KL(teacher) vs KL(self)
+                                    # 0 = pure KL(teacher), 0.5 = equal mix
+                                    # loss = α_sa * KL(teacher) + (1-α_sa) * KL(self)
+                                    # NOTE: when α_sa=0, falls back to pure teacher (v9.1 behavior)
 
     # Pre-training on public data
     pretrain_epochs: int = 10
@@ -92,36 +88,28 @@ class PAIDFDConfig:
 
     # Ablation flags
     use_blue: bool = True        # BLUE (eps^2-weighted) vs equal weights
-    use_ema: bool = True         # EMA logit buffer vs single-round
-    use_mixed_loss: bool = True  # Mixed loss vs pure KL
-    use_ldp: bool = True         # LDP noise vs clean logits (oracle)
-    use_denoising: bool = False  # Class-conditional denoising (v8.2, optional)
-
-    # Legacy compat (v9.x params ignored but accepted)
-    ce_anchor_alpha: float = 0.0
-    self_anchor_alpha: float = 0.0
+    use_ldp: bool = True         # Per-device LDP noise vs clean logits (oracle)
+    use_denoising: bool = True   # Class-conditional denoising (v8.2 key feature)
 
 
 class PAIDFD(FederatedMethod):
-    """PAID-FD v10: Federated Distillation with Persistent Models + Game.
-
-    Key difference from v8/v9: devices maintain persistent local models
-    across rounds. After R rounds with E local epochs each, device i has
-    trained R*E epochs on its private data D_i. This creates genuine
-    local knowledge that differs from the server model.
+    """PAID-FD v9.2: Federated Distillation with Game + Self-Anchor.
 
     Protocol per round:
       1. Server computes optimal price p* via Stackelberg game
       2. Each device decides (participate?, s_i*, eps_i*)
       3. Participating devices:
-         a. Continue training persistent local model on D_i
-         b. Compute logits on public data, clip to [-C, C]
-         c. Add per-device LDP noise: Lap(0, 2C/eps_i)
-         d. Upload noisy logits
+         a. Receive fresh copy of server model
+         b. Train locally on private data (local_epochs, SGD)
+         c. Compute logits on public data, clip to [-C, C]
+         d. Add per-device LDP noise: Lap(0, 2C/eps_i)
+         e. Upload noisy logits
       4. Server: BLUE-weighted average of noisy logits
-      5. Server: Update EMA logit buffer (noise averaging)
-      6. Server: softmax(buffer / T) -> teacher probs
-      7. Server: Mixed loss distillation (alpha*KL + (1-alpha)*CE, fresh SGD)
+      5. Server: softmax(aggregated / T) -> teacher probs
+      6. Server: Self-anchor KL distillation (fresh SGD)
+         - Before training: forward pass to get self_logits (server's knowledge)
+         - loss = α_sa × KL(teacher) + (1-α_sa) × KL(self)
+         - Self-anchor prevents noise drift without using ground truth
     """
 
     def __init__(self, server_model, config=None, n_classes=100, device=None):
@@ -135,15 +123,8 @@ class PAIDFD(FederatedMethod):
             budget=self.config.budget
         )
         self.energy_calc = EnergyCalculator()
-
-        # Persistent local models: each device keeps its own model across rounds
-        self.local_models = {}      # dev_id -> nn.Module
-        self.local_optimizers = {}  # dev_id -> optimizer
-
-        # EMA logit buffer: accumulates aggregated logits across rounds
-        self.logit_buffer = None
-
-        # v10: No persistent distillation optimizer (fresh SGD each round)
+        # v8.1: No persistent optimizer -- fresh SGD each round to prevent
+        # Adam state accumulation that caused monotonic degradation in v8.0
         self._pretrained = False
         self.privacy_spent = {}
         self.price_history = []
@@ -151,7 +132,7 @@ class PAIDFD(FederatedMethod):
 
     def run_round(self, round_idx, devices, client_loaders, public_loader,
                   test_loader=None):
-        """Execute one round of PAID-FD v10."""
+        """Execute one round of PAID-FD v8 (standard FD flow)."""
         self.current_round = round_idx
 
         if not self._pretrained:
@@ -164,7 +145,7 @@ class PAIDFD(FederatedMethod):
         decisions = game_result["decisions"]
         self.price_history.append(price)
 
-        # Collect public images and labels
+        # Collect public images AND labels (labels needed for CE anchor)
         public_images_list = []
         public_labels_list = []
         for data, labels in public_loader:
@@ -192,21 +173,16 @@ class PAIDFD(FederatedMethod):
                 continue
             local_loader = client_loaders[dev_id]
 
-            # v10: Persistent local model (initialized from server on first use)
-            if dev_id not in self.local_models:
-                self.local_models[dev_id] = copy_model(
-                    self.server_model, device=self.device)
-                self.local_optimizers[dev_id] = torch.optim.SGD(
-                    self.local_models[dev_id].parameters(),
-                    lr=self.config.local_lr,
-                    momentum=self.config.local_momentum,
-                    weight_decay=5e-4
-                )
+            # v8: Fresh copy of server model each round
+            local_model = copy_model(self.server_model, device=self.device)
+            local_optimizer = torch.optim.SGD(
+                local_model.parameters(),
+                lr=self.config.local_lr,
+                momentum=self.config.local_momentum,
+                weight_decay=5e-4
+            )
 
-            local_model = self.local_models[dev_id]
-            local_optimizer = self.local_optimizers[dev_id]
-
-            # Local training on private data (persistent model continues)
+            # Local training
             local_model.train()
             criterion = nn.CrossEntropyLoss()
             for epoch in range(self.config.local_epochs):
@@ -217,7 +193,7 @@ class PAIDFD(FederatedMethod):
                     loss.backward()
                     local_optimizer.step()
 
-            # Compute clipped logits on public data
+            # Compute clipped logits
             local_model.eval()
             logit_chunks = []
             bs = 512
@@ -229,12 +205,11 @@ class PAIDFD(FederatedMethod):
                     logit_chunks.append(logits.cpu())
             device_logits = torch.cat(logit_chunks, dim=0)
 
-            # Per-device LDP noise
+            # Per-device LDP
             device_eps = decision.eps_star
             if self.config.use_ldp:
                 noise_scale = 2.0 * C / device_eps
-                noise = np.random.laplace(
-                    0, noise_scale, device_logits.shape).astype(np.float32)
+                noise = np.random.laplace(0, noise_scale, device_logits.shape).astype(np.float32)
                 noisy_logits = device_logits + torch.from_numpy(noise)
             else:
                 noisy_logits = device_logits
@@ -246,7 +221,7 @@ class PAIDFD(FederatedMethod):
                 all_weights.append(1.0)
             eps_list.append(device_eps)
 
-            # Energy accounting
+            # Energy
             s_for_cost = max(int(decision.s_star), 200)
             energy = self.energy_calc.compute_total_energy(
                 cpu_freq=getattr(dev, 'cpu_freq', 1.0),
@@ -256,57 +231,34 @@ class PAIDFD(FederatedMethod):
             )
             for k in ["training", "inference", "communication"]:
                 total_energy[k] += energy.get(k, 0)
+            del local_model, local_optimizer
 
-        # Stage 3: Aggregate -> EMA buffer -> distill
-        distill_diag = {}
+        # Stage 3: Aggregate & distill
+        distill_diag = {}  # v9.2 diagnostics
         if all_logits:
             avg_eps = np.mean(eps_list)
             min_len = min(len(l) for l in all_logits)
             total_w = sum(all_weights)
             norm_w = [w / total_w for w in all_weights]
-            aggregated = sum(
-                w * l[:min_len] for w, l in zip(norm_w, all_logits)).float()
+            aggregated = sum(w * l[:min_len] for w, l in zip(norm_w, all_logits)).float()
 
-            # Optional denoising (v8.2 feature, off by default in v10)
-            if self.config.use_denoising:
-                aggregated = self._denoise_logits(aggregated, public_labels[:min_len])
-
-            # EMA logit buffer: noise averaging across rounds
-            if self.config.use_ema:
-                ema = self.config.ema_momentum
-                if self.logit_buffer is None:
-                    self.logit_buffer = aggregated.clone()
-                else:
-                    buf_len = min(len(self.logit_buffer), min_len)
-                    self.logit_buffer[:buf_len] = (
-                        ema * self.logit_buffer[:buf_len]
-                        + (1 - ema) * aggregated[:buf_len]
-                    )
-                distill_source = self.logit_buffer
-            else:
-                distill_source = aggregated
+            # v8.2: Class-conditional denoising (post-processing, preserves ε-LDP)
+            denoised = self._denoise_logits(aggregated, public_labels[:min_len])
 
             T = self.config.temperature
-            buf_len = min(len(distill_source), min_len)
-            teacher_probs = F.softmax(distill_source[:buf_len] / T, dim=1)
+            teacher_probs = F.softmax(denoised / T, dim=1)
 
-            # v10 diagnostic: pre-distill accuracy
+            # v9.2: Measure pre-distillation accuracy on test set
             pre_distill_acc = None
             if test_loader is not None:
                 pre_eval = self.evaluate(test_loader)
                 pre_distill_acc = pre_eval["accuracy"]
 
-            # Distill with mixed loss
-            if self.config.use_mixed_loss:
-                distill_diag = self._distill_to_server(
-                    teacher_probs, public_images[:buf_len],
-                    public_labels[:buf_len])
-            else:
-                distill_diag = self._distill_to_server(
-                    teacher_probs, public_images[:buf_len],
-                    public_labels=None)
+            distill_diag = self._distill_to_server(
+                teacher_probs, public_images[:min_len],
+                public_labels[:min_len])
 
-            # v10 diagnostic: post-distill accuracy
+            # v9.2: Measure post-distillation accuracy on test set
             if test_loader is not None and pre_distill_acc is not None:
                 post_eval = self.evaluate(test_loader)
                 distill_diag["pre_distill_acc"] = pre_distill_acc
@@ -335,9 +287,8 @@ class PAIDFD(FederatedMethod):
             "total_quality": game_result["total_quality"],
             "max_privacy_spent": max(self.privacy_spent.values()) if self.privacy_spent else 0,
             "avg_privacy_spent": float(np.mean(list(self.privacy_spent.values()))) if self.privacy_spent else 0,
-            "n_local_models": len(self.local_models),
         }
-        extra_dict.update(distill_diag)
+        extra_dict.update(distill_diag)  # v9.2 diagnostics
 
         result = RoundResult(
             round_idx=round_idx,
@@ -385,33 +336,85 @@ class PAIDFD(FederatedMethod):
         print(f"  [Pre-training] Done.")
 
     def _denoise_logits(self, aggregated, public_labels):
-        """Class-conditional denoising (optional, from v8.2)."""
+        """Class-conditional denoising of aggregated logits.
+
+        For each class c, replace per-sample logits with the class-conditional
+        mean. With n_c samples per class, this reduces LDP noise std by √n_c.
+
+        For CIFAR-100 with 20K public data: n_c ≈ 200 → noise ÷ √200 ≈ 14×.
+        SNR improves from ~0.8 (unusable) to ~11 (clean enough for KL distill).
+
+        Privacy: Pure server-side post-processing → ε-LDP preserved by
+        post-processing immunity theorem.
+        """
+        if not self.config.use_denoising:
+            return aggregated
+
         denoised = aggregated.clone()
         for c in range(self.n_classes):
             mask = (public_labels == c)
             n_c = mask.sum().item()
             if n_c > 1:
-                class_mean = aggregated[mask].mean(dim=0)
+                class_mean = aggregated[mask].mean(dim=0)  # [n_classes] vector
                 denoised[mask] = class_mean.unsqueeze(0).expand(n_c, -1)
         return denoised
 
     def _distill_to_server(self, teacher_probs, public_images, public_labels=None):
-        """v10: Mixed loss distillation with fresh SGD.
+        """v9.2: KL distillation with self-anchor (optional CE anchor).
 
-        loss = alpha * KL(student || teacher) * T^2 + (1-alpha) * CE(student, labels)
+        Self-anchor (α_sa > 0):
+          Before training loop, compute self_logits = server's current predictions.
+          loss = α_sa * KL(student || teacher) + (1-α_sa) * KL(student || self)
+          Both KL terms scaled by T².
 
-        Fresh SGD each round to avoid Adam state leak (v8.0 bug).
-        CE term provides ground-truth anchor; KL term transfers ensemble knowledge.
+        This prevents noise drift: the server "remembers" its own knowledge and
+        only partially trusts the noisy teacher. Unlike CE anchor, self-anchor
+        doesn't bypass the distillation pathway → γ remains relevant.
+
+        Fallback: α_sa=0 → pure KL(teacher) (v9.1 behavior).
 
         Returns:
-            dict with diagnostic signals
+            dict with diagnostic signals:
+              - kl_teacher_self: KL(teacher || self) — disagreement between anchors
+              - mean_loss_teacher: average KL loss on noisy teacher
+              - mean_loss_self: average KL loss on self-anchor (if used)
         """
         T = self.config.temperature
-        alpha = self.config.distill_alpha
+        alpha_ce = self.config.ce_anchor_alpha
+        alpha_sa = self.config.self_anchor_alpha
         n_target = min(len(teacher_probs), len(public_images))
         diagnostics = {}
 
+        # --- Self-anchor: compute server's current predictions BEFORE training ---
+        self_teacher_probs = None
+        if alpha_sa > 0:
+            self.server_model.eval()
+            self_logit_chunks = []
+            bs = 512
+            with torch.no_grad():
+                for start in range(0, n_target, bs):
+                    end = min(start + bs, n_target)
+                    batch = public_images[start:end].to(self.device)
+                    logits = self.server_model(batch)
+                    self_logit_chunks.append(logits.cpu())
+            self_logits_all = torch.cat(self_logit_chunks, dim=0)
+            # Convert to soft probabilities at temperature T (same as teacher)
+            self_teacher_probs = F.softmax(self_logits_all / T, dim=1)
+
+            # v9.2 diagnostic: KL divergence between teacher and self-teacher
+            # Large KL = teacher is very different from server's knowledge (noisy)
+            # Small KL = self-anchor adds little new info
+            with torch.no_grad():
+                kl_ts = F.kl_div(
+                    torch.log(self_teacher_probs + 1e-8),
+                    teacher_probs[:n_target],
+                    reduction='batchmean'
+                ).item()
+                diagnostics["kl_teacher_self"] = kl_ts
+
+        # --- Training loop ---
         self.server_model.train()
+        # v8.2+: Fresh optimizer each round (no Adam state leak from v8.0)
         optimizer = torch.optim.SGD(
             self.server_model.parameters(),
             lr=self.config.distill_lr,
@@ -424,8 +427,7 @@ class PAIDFD(FederatedMethod):
         ])
         ce_criterion = nn.CrossEntropyLoss()
         batch_size = 256
-        loss_kl_accum, loss_ce_accum, n_batches = 0.0, 0.0, 0
-
+        loss_teacher_accum, loss_self_accum, n_batches = 0.0, 0.0, 0
         for epoch in range(self.config.distill_epochs):
             perm = torch.randperm(n_target)
             for start in range(0, n_target, batch_size):
@@ -435,33 +437,47 @@ class PAIDFD(FederatedMethod):
                 target_probs = teacher_probs[idx].to(self.device)
                 student_logits = self.server_model(data)
 
-                # KL distillation loss (ensemble teacher)
-                loss_kl = F.kl_div(
+                # KL distillation loss (noisy teacher)
+                loss_kl_teacher = F.kl_div(
                     F.log_softmax(student_logits / T, dim=1),
                     target_probs,
                     reduction='batchmean'
                 ) * (T * T)
 
-                # CE anchor loss (ground truth)
-                if public_labels is not None and alpha < 1.0:
+                # Self-anchor KL loss (server's own previous knowledge)
+                if alpha_sa > 0 and self_teacher_probs is not None:
+                    self_probs = self_teacher_probs[idx].to(self.device)
+                    loss_kl_self = F.kl_div(
+                        F.log_softmax(student_logits / T, dim=1),
+                        self_probs,
+                        reduction='batchmean'
+                    ) * (T * T)
+                    loss_distill = alpha_sa * loss_kl_teacher + (1.0 - alpha_sa) * loss_kl_self
+                    loss_self_accum += loss_kl_self.item()
+                else:
+                    loss_distill = loss_kl_teacher
+
+                loss_teacher_accum += loss_kl_teacher.item()
+                n_batches += 1
+
+                # CE anchor loss (ground truth on public data) — can combine with self-anchor
+                if alpha_ce > 0 and public_labels is not None:
                     labels = public_labels[idx].to(self.device)
                     loss_ce = ce_criterion(student_logits, labels)
-                    loss = alpha * loss_kl + (1.0 - alpha) * loss_ce
-                    loss_ce_accum += loss_ce.item()
+                    loss = alpha_ce * loss_ce + (1.0 - alpha_ce) * loss_distill
                 else:
-                    loss = loss_kl
-
-                loss_kl_accum += loss_kl.item()
-                n_batches += 1
+                    loss = loss_distill
 
                 optimizer.zero_grad()
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.server_model.parameters(), 5.0)
                 optimizer.step()
 
+        # v9.2 diagnostics: mean losses
         if n_batches > 0:
-            diagnostics["mean_loss_kl"] = loss_kl_accum / n_batches
-            diagnostics["mean_loss_ce"] = loss_ce_accum / n_batches
+            diagnostics["mean_loss_teacher"] = loss_teacher_accum / n_batches
+            if alpha_sa > 0:
+                diagnostics["mean_loss_self"] = loss_self_accum / n_batches
         return diagnostics
 
     def aggregate(self, updates, weights):
@@ -474,8 +490,7 @@ class PAIDFD(FederatedMethod):
             "participation_history": self.participation_history,
             "best_accuracy": self.get_best_accuracy(),
             "final_accuracy": self.get_final_accuracy(),
-            "avg_participation": np.mean(self.participation_history) if self.participation_history else 0,
-            "n_local_models": len(self.local_models),
+            "avg_participation": np.mean(self.participation_history) if self.participation_history else 0
         }
 
 

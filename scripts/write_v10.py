@@ -1,4 +1,7 @@
-"""
+#!/usr/bin/env python3
+"""Write v10 paid_fd.py to disk."""
+
+content = r'''"""
 PAID-FD v10: Persistent Local Models + Solver Fix
 ===================================================
 
@@ -488,3 +491,18 @@ def create_paid_fd(model_name="resnet18", n_classes=100, gamma=10.0,
     model = get_model(model_name, n_classes=n_classes)
     config = PAIDFDConfig(gamma=gamma, **config_kwargs)
     return PAIDFD(model, config, n_classes, device)
+'''
+
+import os
+target = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                      "src", "methods", "paid_fd.py")
+with open(target, 'w') as f:
+    f.write(content)
+print(f"Written {len(content)} chars to {target}")
+
+# Verify
+with open(target, 'r') as f:
+    lines = f.readlines()
+print(f"File has {len(lines)} lines")
+print(f"First line: {lines[0].strip()}")
+print(f"Last line: {lines[-1].strip()}")
