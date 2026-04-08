@@ -315,8 +315,12 @@ def run_single_experiment(
         avg_s_list.append(extra.get('avg_s', 0))
         
         if verbose and (r % 10 == 0 or r == n_rounds - 1):
+            cum_pay = extra.get('cumulative_payment', 0)
+            avg_priv = extra.get('avg_privacy_spent', 0)
             print(f"    Round {r:3d}/{n_rounds}: acc={result.accuracy:.4f}, "
-                  f"loss={result.loss:.4f}, part={result.participation_rate:.2f}")
+                  f"loss={result.loss:.4f}, part={result.participation_rate:.2f}, "
+                  f"p*={extra.get('price',0):.3f}, ε*={extra.get('avg_eps',0):.2f}, "
+                  f"Σcost={cum_pay:.1f}, Σε={avg_priv:.1f}")
     
     elapsed = time.time() - start_time
     

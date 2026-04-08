@@ -146,6 +146,7 @@ class PAIDFD(FederatedMethod):
         # v10: No persistent distillation optimizer (fresh SGD each round)
         self._pretrained = False
         self.privacy_spent = {}
+        self.cumulative_payment = 0.0
         self.price_history = []
         self.participation_history = []
 
@@ -327,12 +328,25 @@ class PAIDFD(FederatedMethod):
         participation_rate = len(participants) / len(devices) if devices else 0
         self.participation_history.append(participation_rate)
 
+        # Efficiency metrics (v10: the game's value is efficiency, not accuracy)
+        round_payment = game_result.get("total_payment", price * game_result["total_quality"])
+        self.cumulative_payment += round_payment
+        round_eps_total = sum(eps_list) if eps_list else 0  # total ε spent this round
+        eps_std = float(np.std(eps_list)) if len(eps_list) > 1 else 0.0
+
         extra_dict = {
+            # Game equilibrium
             "price": price,
             "avg_s": game_result["avg_s"],
             "avg_eps": game_result["avg_eps"],
+            "eps_std": eps_std,
             "server_utility": game_result["server_utility"],
             "total_quality": game_result["total_quality"],
+            # Cost accounting
+            "round_payment": round_payment,
+            "cumulative_payment": self.cumulative_payment,
+            # Privacy accounting
+            "round_eps_total": round_eps_total,
             "max_privacy_spent": max(self.privacy_spent.values()) if self.privacy_spent else 0,
             "avg_privacy_spent": float(np.mean(list(self.privacy_spent.values()))) if self.privacy_spent else 0,
             "n_local_models": len(self.local_models),
@@ -475,6 +489,7 @@ class PAIDFD(FederatedMethod):
             "best_accuracy": self.get_best_accuracy(),
             "final_accuracy": self.get_final_accuracy(),
             "avg_participation": np.mean(self.participation_history) if self.participation_history else 0,
+            "cumulative_payment": self.cumulative_payment,
             "n_local_models": len(self.local_models),
         }
 
