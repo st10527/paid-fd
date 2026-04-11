@@ -221,7 +221,7 @@ def run_single_experiment(
     """
     import torch
     from src.utils.seed import set_seed
-    from src.data.datasets import load_cifar100_safe_split, create_synthetic_datasets
+    from src.data.datasets import load_cifar100_safe_split, load_cifar10_safe_split, create_synthetic_datasets
     from src.data.partition import DirichletPartitioner, create_client_loaders
     from src.devices.heterogeneity import HeterogeneityGenerator
     from src.models import get_model
@@ -231,6 +231,7 @@ def run_single_experiment(
     
     n_devices = config.get('n_devices', 50)
     synthetic = config.get('synthetic', False)
+    dataset_name = config.get('dataset', 'cifar100')
     
     # ---- Data ----
     if synthetic:
@@ -238,8 +239,18 @@ def run_single_experiment(
             n_train=n_devices * 100, n_test=1000, n_public=5000, seed=seed
         )
         targets = np.array(train_data.targets)
+        num_classes = 100
+    elif dataset_name == 'cifar10':
+        train_data, public_data, test_data = load_cifar10_safe_split(
+            root='./data',
+            n_public=config.get('public_samples', 10000),
+            seed=seed
+        )
+        all_targets = np.array(train_data.dataset.targets)
+        targets = all_targets[train_data.indices]
+        num_classes = 10
     else:
-        # Use CIFAR-100 only (safe split: no data leakage)
+        # CIFAR-100 (default, safe split: no data leakage)
         # Returns: (private_subset, public_subset, test_set)
         train_data, public_data, test_data = load_cifar100_safe_split(
             root='./data',
@@ -249,6 +260,7 @@ def run_single_experiment(
         # train_data is a Subset — extract targets aligned to its 0-based indexing
         all_targets = np.array(train_data.dataset.targets)
         targets = all_targets[train_data.indices]
+        num_classes = 100
     
     partitioner = DirichletPartitioner(
         alpha=config.get('alpha', 0.5),
@@ -278,8 +290,8 @@ def run_single_experiment(
             dev.data_size = len(client_indices[dev.device_id])
     
     # ---- Method ----
-    model = get_model(config.get('model', 'resnet18'), num_classes=100)
-    method = _create_method(method_name, model, config, device)
+    model = get_model(config.get('model', 'resnet18'), num_classes=num_classes)
+    method = _create_method(method_name, model, config, device, num_classes=num_classes)
     
     # ---- Training loop ----
     accuracies = []
@@ -344,7 +356,7 @@ def run_single_experiment(
     }
 
 
-def _create_method(method_name: str, model, config: dict, device: str):
+def _create_method(method_name: str, model, config: dict, device: str, num_classes: int = 100):
     """Create a method instance from name and config."""
     from src.methods import (PAIDFD, FixedEpsilon, FedAvg, FedMD, FedGMKD, CSRA)
     from src.methods.paid_fd import PAIDFDConfig
@@ -392,7 +404,7 @@ def _create_method(method_name: str, model, config: dict, device: str):
             use_ldp=mc.get('use_ldp', True),
             use_denoising=mc.get('use_denoising', False),
         )
-        return PAIDFD(m, cfg, 100, device)
+        return PAIDFD(m, cfg, num_classes, device)
     
     elif method_name.startswith('Fixed-eps'):
         eps = float(method_name.split('-')[-1])
@@ -411,7 +423,7 @@ def _create_method(method_name: str, model, config: dict, device: str):
             ce_anchor_alpha=mc.get('ce_anchor_alpha', 0.0),
             use_denoising=mc.get('use_denoising', True),
         )
-        return FixedEpsilon(m, cfg, 100, device)
+        return FixedEpsilon(m, cfg, num_classes, device)
     
     elif method_name == 'FedAvg':
         cfg = FedAvgConfig(
@@ -420,7 +432,7 @@ def _create_method(method_name: str, model, config: dict, device: str):
             local_momentum=tc.get('local_momentum', 0.9),
             participation_rate=mc.get('participation_rate', 0.5),
         )
-        return FedAvg(m, cfg, 100, device)
+        return FedAvg(m, cfg, num_classes, device)
     
     elif method_name == 'FedMD':
         cfg = FedMDConfig(
@@ -435,7 +447,7 @@ def _create_method(method_name: str, model, config: dict, device: str):
             ce_anchor_alpha=mc.get('ce_anchor_alpha', 0.0),
             use_denoising=mc.get('use_denoising', False),
         )
-        return FedMD(m, cfg, 100, device)
+        return FedMD(m, cfg, num_classes, device)
     
     elif method_name == 'FedGMKD':
         cfg = FedGMKDConfig(
@@ -445,7 +457,7 @@ def _create_method(method_name: str, model, config: dict, device: str):
             local_epochs=mc.get('local_epochs', 5),
             local_lr=mc.get('local_lr', 0.01),
         )
-        return FedGMKD(m, cfg, 100, device)
+        return FedGMKD(m, cfg, num_classes, device)
     
     elif method_name == 'CSRA':
         cfg = CSRAConfig(
@@ -453,7 +465,7 @@ def _create_method(method_name: str, model, config: dict, device: str):
             local_epochs=mc.get('local_epochs', 5),
             local_lr=mc.get('local_lr', 0.01),
         )
-        return CSRA(m, cfg, 100, device)
+        return CSRA(m, cfg, num_classes, device)
     
     else:
         raise ValueError(f"Unknown method: {method_name}")

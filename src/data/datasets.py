@@ -542,3 +542,56 @@ def load_cifar100_safe_split(root='./data', n_public=10000, seed=42):
     print(f"  Test (Evaluation):{len(test_set)} samples (from Test)")
     
     return private_set, public_set, test_set
+
+
+def load_cifar10_safe_split(root='./data', n_public=10000, seed=42):
+    """
+    TMC Safe Mode for CIFAR-10:
+    Split CIFAR-10 Training Set (50k) into:
+    1. Private Data (40k): Local training (Non-IID)
+    2. Public Data (10k): Server knowledge distillation (IID)
+    
+    Test Set (10k) reserved for evaluation only.
+    """
+    import torch
+    import torchvision
+    import torchvision.transforms as transforms
+    from torch.utils.data import Subset
+    import numpy as np
+
+    stats = ((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
+    transform_train = transforms.Compose([
+        transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize(*stats)
+    ])
+    transform_test = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize(*stats)
+    ])
+
+    full_train_aug = torchvision.datasets.CIFAR10(
+        root=root, train=True, download=True, transform=transform_train
+    )
+    full_train_clean = torchvision.datasets.CIFAR10(
+        root=root, train=True, download=True, transform=transform_test
+    )
+    test_set = torchvision.datasets.CIFAR10(
+        root=root, train=False, download=True, transform=transform_test
+    )
+
+    np.random.seed(seed)
+    indices = np.random.permutation(len(full_train_aug))
+    public_indices = indices[:n_public]
+    private_indices = indices[n_public:]
+
+    private_set = Subset(full_train_aug, private_indices)
+    public_set = Subset(full_train_clean, public_indices)
+
+    print(f"[TMC Safe Mode] CIFAR-10 Split Report:")
+    print(f"  Public (Server):  {len(public_set)} samples (from Train)")
+    print(f"  Private (Users):  {len(private_set)} samples (from Train)")
+    print(f"  Test (Evaluation):{len(test_set)} samples (from Test)")
+
+    return private_set, public_set, test_set

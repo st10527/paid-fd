@@ -305,9 +305,74 @@ twcc/
 ├── setup_env.sh            ← 環境安裝腳本
 ├── submit_test.sh          ← 測試用 SLURM job（gtest, 5 rounds）
 ├── submit_single.sh        ← 單一實驗 SLURM job
-└── submit_array.sh         ← 批次實驗 SLURM array job（20 configs）
+├── submit_array.sh         ← 批次實驗 SLURM array job（20 configs）
+├── submit_phase1.sh        ← TMC Phase 1: 33 runs (A+A'+B+C)
+├── submit_phase2.sh        ← TMC Phase 2: 9 runs (CIFAR-10)
+└── submit_phase3.sh        ← TMC Phase 3: 12 runs (α sweep)
 
 scripts/
 ├── run_v10_1_single.py     ← 單一 (gamma, seed, lambda_mult) 實驗
+├── run_tmc_experiment.py   ← TMC 全部 54 個實驗的 master runner
+├── run_tmc_lab.sh          ← Lab GPU sequential runner
+├── analyze_tmc_results.py  ← TMC 結果分析（支援 partial results）
 └── aggregate_twcc_results.py ← 聚合所有結果 + 分析
+```
+
+---
+
+## 🧪 TMC 論文全部實驗 (54 runs)
+
+### 概覽
+
+| Phase | 實驗 | 說明 | Runs | 預估時間 |
+|-------|------|------|------|----------|
+| 1 | A | Privacy-preserving comparison (Fixed-ε, CSRA) | 9 | ~2.5hr |
+| 1 | A' | No-privacy reference (FedAvg, FedMD, FedGMKD) | 3 | ~0.8hr |
+| 1 | B | N sweep: N={20,80} × γ={3,10} | 12 | ~3hr |
+| 1 | C | Ablation: BLUE off / full-part / oracle | 9 | ~2.5hr |
+| 2 | D | CIFAR-10 cross-dataset validation | 9 | ~1.5hr |
+| 3 | E | Non-IID α sweep: α={0.1,1.0} × γ={3,10} | 12 | ~3hr |
+| | | **Total** | **54** | **~13hr** |
+
+### 執行方式
+
+```bash
+# Step 1: 確認已經 setup 好環境（只需一次）
+bash twcc/setup_env.sh
+
+# Step 2: 看有哪些實驗
+python scripts/run_tmc_experiment.py --phase 1 --list
+python scripts/run_tmc_experiment.py --phase 2 --list
+python scripts/run_tmc_experiment.py --phase 3 --list
+
+# Step 3: Phase 1 (Week 1)
+sbatch twcc/submit_phase1.sh     # 33 個 SLURM array jobs
+
+# Step 4: 查看進度
+python scripts/analyze_tmc_results.py --progress
+squeue -u $USER
+
+# Step 5: Phase 2 (Week 2, Phase 1 結果分析完後)
+sbatch twcc/submit_phase2.sh     # 9 個
+
+# Step 6: Phase 3 (Week 3)
+sbatch twcc/submit_phase3.sh     # 12 個
+
+# 完整分析
+python scripts/analyze_tmc_results.py
+python scripts/analyze_tmc_results.py --phase 1    # 只看 Phase 1
+python scripts/analyze_tmc_results.py --exp A      # 只看 Exp A
+```
+
+### 在 Lab GPU 跑（不用 TWCC）
+
+```bash
+# Phase 1 on aelab-3
+nohup bash scripts/run_tmc_lab.sh 1 0 32 cuda:0 > results/logs/phase1.log 2>&1 &
+
+# 只跑 Exp A (task 0-8) on GPU 0
+nohup bash scripts/run_tmc_lab.sh 1 0 8 cuda:0 > results/logs/expA.log 2>&1 &
+
+# Phase 2 on GPU 1 (同時)
+nohup bash scripts/run_tmc_lab.sh 2 0 8 cuda:1 > results/logs/phase2.log 2>&1 &
 ```
