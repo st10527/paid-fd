@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=paid-fd-sweep         # 工作名稱
-#SBATCH --account=PROJECT_ID             # ← 改成你的計畫 ID (例: GOV112345)
+#SBATCH --account=ACD114197             # ← 改成你的計畫 ID (例: GOV112345)
 #SBATCH --partition=gp1d                  # gtest(30min測試)/gp1d(1天)/gp2d(2天)/gp4d(4天)
 #SBATCH --nodes=1                         # 每個 task 1 個節點
 #SBATCH --ntasks=1                        # 每個 task 1 個任務
@@ -11,7 +11,7 @@
 #SBATCH --output=results/logs/slurm_%A_%a.log
 #SBATCH --error=results/logs/slurm_%A_%a.err
 #SBATCH --mail-type=END,FAIL
-# #SBATCH --mail-user=你的email@xxx.com
+#SBATCH --mail-user=167320@o365.tku.edu.tw
 
 # ============================================================
 # PAID-FD v10.1 Array Job — 3-seed + Lambda Sweep

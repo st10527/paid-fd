@@ -22,7 +22,7 @@
 # ============================================================
 
 #SBATCH --job-name=tmc-phase3
-#SBATCH --account=PROJECT_ID             # ← 改成你的計畫 ID
+#SBATCH --account=ACD114197             # ← 改成你的計畫 ID
 #SBATCH --partition=gp1d
 #SBATCH --nodes=1
 #SBATCH --ntasks=1

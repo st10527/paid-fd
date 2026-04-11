@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=paid-fd-test          # 工作名稱
-#SBATCH --account=PROJECT_ID             # ← 改成你的計畫 ID (例: GOV112345)
+#SBATCH --account=ACD114197             # ← 改成你的計畫 ID (例: GOV112345)
 #SBATCH --partition=gtest                 # 測試用 queue（最長30分鐘，不浪費額度）
 #SBATCH --nodes=1
 #SBATCH --ntasks=1

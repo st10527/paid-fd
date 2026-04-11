@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=paid-fd-single       # 工作名稱
-#SBATCH --account=PROJECT_ID             # ← 改成你的計畫 ID (例: GOV112345)
+#SBATCH --account=ACD114197             # ← 改成你的計畫 ID (例: GOV112345)
 #SBATCH --partition=gp1d                 # gtest(30min測試)/gp1d(1天)/gp2d(2天)/gp4d(4天)
 #SBATCH --nodes=1                        # 1 個節點
 #SBATCH --ntasks=1                       # 1 個任務
@@ -10,7 +10,7 @@
 #SBATCH --output=results/logs/slurm_%j.log   # stdout log
 #SBATCH --error=results/logs/slurm_%j.err    # stderr log
 #SBATCH --mail-type=END,FAIL             # 完成或失敗時寄信
-# #SBATCH --mail-user=你的email@xxx.com  # ← 取消註解並填你的 email
+#SBATCH --mail-user=167320@o365.tku.edu.tw  # ← 取消註解並填你的 email
 
 # ============================================================
 # PAID-FD Single Run on TWCC
