@@ -2,17 +2,21 @@
 # ============================================================
 # TMC Phase 2: CIFAR-10 Cross-Dataset Validation (9 runs)
 # ============================================================
+# 💰 計費安全：sbatch 批次作業，跑完自動結束，--time=00:30:00 硬上限
+#
 # Exp D: Privacy-preserving methods on CIFAR-10
 #        PAID-FD + Fixed-ε + CSRA × 3 seeds
 #
-# Est. time: ~10 min/run × 9 = ~1.5 hrs
-# CIFAR-10 (10 classes) is faster than CIFAR-100
+# Est. time: ~10 min/run, 硬上限 30 min
 #
 # Usage:
 #   sbatch twcc/submit_phase2.sh               # 全部 9 個
 #   sbatch --array=0-2 twcc/submit_phase2.sh   # 只跑 PAID-FD
 #   sbatch --array=3-5 twcc/submit_phase2.sh   # 只跑 Fixed-ε
 #   sbatch --array=6-8 twcc/submit_phase2.sh   # 只跑 CSRA
+#
+# 跑完後確認安全:
+#   bash twcc/check_billing_safe.sh
 # ============================================================
 
 #SBATCH --job-name=tmc-phase2
@@ -22,7 +26,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:1
-#SBATCH --time=00:30:00                  # CIFAR-10 更快
+#SBATCH --time=00:30:00                  # CIFAR-10 ~10min, 硬上限 30min (超時自動 kill)
 #SBATCH --array=0-8
 #SBATCH --output=results/logs/phase2_%A_%a.log
 #SBATCH --error=results/logs/phase2_%A_%a.err
@@ -52,3 +56,4 @@ python scripts/run_tmc_experiment.py \
     --rounds 100
 
 echo "Done: Phase 2 Task ${SLURM_ARRAY_TASK_ID} at $(date)"
+echo "💰 此 job 已結束，GPU 已自動釋放，不會繼續扣款"

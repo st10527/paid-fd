@@ -2,13 +2,15 @@
 # ============================================================
 # TMC Phase 1: Core Experiments (33 runs)
 # ============================================================
+# 💰 計費安全：這是 sbatch 批次作業，跑完自動結束，不會持續扣款
+#    --time=00:45:00 硬上限 → 超時強制 kill → 不可能忘記關
+#
 # Exp A:  Privacy-preserving comparison (9)   — Fixed-ε, CSRA
 # Exp A': No-privacy reference (3)            — FedAvg, FedMD, FedGMKD
 # Exp B:  N sweep / scalability (12)          — N={20,80} × γ={3,10}
 # Exp C:  Ablation study (9)                  — BLUE off, full-part, oracle
 #
-# Est. time: ~15 min/run × 33 = ~8.3 hrs (parallelized on TWCC)
-# Each job uses 1 GPU, SLURM schedules in parallel
+# Est. time: ~15 min/run, 硬上限 45 min
 #
 # Usage:
 #   sbatch twcc/submit_phase1.sh               # 全部 33 個
@@ -17,10 +19,8 @@
 #   sbatch --array=12-23 twcc/submit_phase1.sh  # 只跑 Exp B
 #   sbatch --array=24-32 twcc/submit_phase1.sh  # 只跑 Exp C
 #
-# Monitor:
-#   squeue -u $USER
-#   sacct -j <JOBID> --format=JobID%20,State,Elapsed,MaxRSS
-#   ls results/experiments/tmc/exp*.json | wc -l  # 看完成幾個
+# 跑完後確認安全:
+#   bash twcc/check_billing_safe.sh
 # ============================================================
 
 #SBATCH --job-name=tmc-phase1
@@ -30,7 +30,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:1
-#SBATCH --time=01:00:00                  # 每個 run ~15min, 留 buffer
+#SBATCH --time=00:45:00                  # 每個 run ~15min, 硬上限 45min (超時自動 kill)
 #SBATCH --array=0-32
 #SBATCH --output=results/logs/phase1_%A_%a.log
 #SBATCH --error=results/logs/phase1_%A_%a.err
@@ -63,3 +63,4 @@ python scripts/run_tmc_experiment.py \
     --rounds 100
 
 echo "Done: Phase 1 Task ${SLURM_ARRAY_TASK_ID} at $(date)"
+echo "💰 此 job 已結束，GPU 已自動釋放，不會繼續扣款"
