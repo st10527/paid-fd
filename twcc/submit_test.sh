@@ -47,7 +47,7 @@ if torch.cuda.is_available():
 
 echo ""
 echo "[2/4] Project imports check..."
-cd ${WORK:-$HOME}/paid-fd
+cd /work/$USER/paid-fd
 python -c "
 from scripts.run_all_experiments import run_single_experiment, save_json
 from src.data.datasets import load_cifar100_safe_split

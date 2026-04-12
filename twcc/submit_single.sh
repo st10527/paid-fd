@@ -44,7 +44,7 @@ source activate paid-fd 2>/dev/null || conda activate paid-fd
 
 # ---- 切換到專案目錄 ----
 # TWCC: /home 空間有限，建議用 /work
-cd ${WORK:-$HOME}/paid-fd
+cd /work/$USER/paid-fd
 
 # ---- 確保資料夾存在 ----
 mkdir -p results/logs results/experiments

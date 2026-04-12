@@ -80,7 +80,7 @@ module load miniconda3 2>/dev/null || module load anaconda3 2>/dev/null || true
 source activate paid-fd 2>/dev/null || conda activate paid-fd
 
 # ---- 切換到專案目錄 ----
-cd ${WORK:-$HOME}/paid-fd
+cd /work/$USER/paid-fd
 mkdir -p results/logs results/experiments
 
 # ---- 執行（run_v10_1_single.py 會自動 skip 已有結果的 config）----

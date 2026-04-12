@@ -40,7 +40,7 @@ module purge 2>/dev/null || true
 module load miniconda3
 source activate paid-fd 2>/dev/null || conda activate paid-fd
 
-cd "$SLURM_SUBMIT_DIR" || cd ~/paid_fd
+cd "$SLURM_SUBMIT_DIR" || cd /work/$USER/paid-fd
 
 mkdir -p results/experiments/tmc
 mkdir -p results/logs
