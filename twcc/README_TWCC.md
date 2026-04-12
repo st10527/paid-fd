@@ -23,7 +23,7 @@
 cd ~/Desktop/tku_research\ paper/2026_TMC/paid_fd
 
 # 把 PROJECT_ID 改成你的計畫 ID，email 填你的
-python twcc/configure.py GOV112345 --email your@tku.edu.tw
+python3 twcc/configure.py ACD114197 --email 167320@o365.tku.edu.tw
 
 # commit + push
 git add twcc/ scripts/run_v10_1_single.py scripts/aggregate_twcc_results.py
@@ -38,7 +38,7 @@ git push
 macOS 直接開 Terminal：
 
 ```bash
-ssh <你的主機帳號>@twnia2-cli.nchc.org.tw
+ssh u4622524@ln01.twcc.ai
 ```
 
 > ⚠️ **登入流程**：
@@ -47,7 +47,7 @@ ssh <你的主機帳號>@twnia2-cli.nchc.org.tw
 >    - **1** = Mobile App OTP（開 IDExpert App 看驗證碼）
 >    - **2** = Mobile App Push（指紋/臉部辨識）
 >    - **3** = Email OTP（驗證碼寄到信箱）
-> 3. 輸入 **主機密碼**
+> 3. 輸入 **主機密碼** yE#8Nv@!XAXms6F
 > 4. 輸入 **OTP 認證碼**
 > 
 > ❗ 連續 3 次登入失敗會被鎖 15 分鐘

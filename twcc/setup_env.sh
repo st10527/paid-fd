@@ -51,12 +51,28 @@ echo "  Setup complete!"
 echo "  To activate: conda activate ${ENV_NAME}"
 echo "============================================================"
 
-# 驗證
+# ---- 6. 預先下載資料集（避免 job 時間被下載吃掉）----
+echo "[6/6] Pre-downloading datasets (CIFAR-100 + CIFAR-10)..."
+mkdir -p data
 python -c "
-import torch
+import torch, torchvision
 print(f'PyTorch: {torch.__version__}')
 print(f'CUDA available: {torch.cuda.is_available()}')
 if torch.cuda.is_available():
     print(f'GPU: {torch.cuda.get_device_name(0)}')
-    print(f'GPU count: {torch.cuda.device_count()}')
+
+# 預下載 CIFAR-100 (~170MB) 和 CIFAR-10 (~170MB)
+print('Downloading CIFAR-100...')
+torchvision.datasets.CIFAR100(root='./data', train=True, download=True)
+torchvision.datasets.CIFAR100(root='./data', train=False, download=True)
+print('Downloading CIFAR-10...')
+torchvision.datasets.CIFAR10(root='./data', train=True, download=True)
+torchvision.datasets.CIFAR10(root='./data', train=False, download=True)
+print('All datasets ready!')
 "
+
+echo ""
+echo "============================================================"
+echo "  ✅ Setup complete! Datasets pre-downloaded."
+echo "  每個 sbatch job 不需要再下載，直接開始訓練"
+echo "============================================================"
