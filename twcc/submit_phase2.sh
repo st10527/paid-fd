@@ -23,7 +23,7 @@
 #SBATCH --account=ACD114197             # ← 改成你的計畫 ID
 #SBATCH --partition=gp1d
 #SBATCH --nodes=1
-#SBATCH --ntasks=1
+#SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:1
 #SBATCH --time=03:00:00                  # CIFAR-10 (10 classes) 比 CIFAR-100 快, 預估 ~2hr, 硬上限 3hr

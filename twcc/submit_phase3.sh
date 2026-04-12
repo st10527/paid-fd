@@ -25,7 +25,7 @@
 #SBATCH --account=ACD114197             # ← 改成你的計畫 ID
 #SBATCH --partition=gp1d
 #SBATCH --nodes=1
-#SBATCH --ntasks=1
+#SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:1
 #SBATCH --time=05:00:00                  # V100 實測: N=50 ~3.5hr, α=0.1 可能稍慢, 硬上限 5hr

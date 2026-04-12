@@ -3,7 +3,7 @@
 #SBATCH --account=ACD114197             # ← 改成你的計畫 ID (例: GOV112345)
 #SBATCH --partition=gp1d                 # gtest(30min測試)/gp1d(1天)/gp2d(2天)/gp4d(4天)
 #SBATCH --nodes=1                        # 1 個節點
-#SBATCH --ntasks=1                       # 1 個任務
+#SBATCH --ntasks-per-node=1              # 1 個任務
 #SBATCH --cpus-per-task=4                # 4 CPU cores (比例: 1 GPU = 4 CPU = 90GB RAM)
 #SBATCH --gres=gpu:1                     # 1 張 V100 GPU
 #SBATCH --time=04:00:00                  # 最大 4 小時（1 run 約 2.5hr）

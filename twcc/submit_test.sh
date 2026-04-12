@@ -3,7 +3,7 @@
 #SBATCH --account=ACD114197             # ← 改成你的計畫 ID (例: GOV112345)
 #SBATCH --partition=gtest                 # 測試用 queue（最長30分鐘，不浪費額度）
 #SBATCH --nodes=1
-#SBATCH --ntasks=1
+#SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:1
 #SBATCH --time=00:30:00                   # 只要 30 分鐘（跑 5 rounds 測試）

@@ -13,12 +13,16 @@
 # V100 實測：5 rounds = 13 min → 100 rounds ≈ 3.5 hr (N=50), ~5.5 hr (N=80)
 # 硬上限 6 小時，留 buffer
 #
-# Usage:
-#   sbatch twcc/submit_phase1.sh               # 全部 33 個
-#   sbatch --array=0-8  twcc/submit_phase1.sh   # 只跑 Exp A
-#   sbatch --array=9-11 twcc/submit_phase1.sh   # 只跑 Exp A'
-#   sbatch --array=12-23 twcc/submit_phase1.sh  # 只跑 Exp B
-#   sbatch --array=24-32 twcc/submit_phase1.sh  # 只跑 Exp C
+# ⚠️ TWCC 每用戶最多 ~20 個 submitted jobs！Phase 1 要分兩批：
+#   Batch 1: sbatch twcc/submit_phase1.sh                     # array 0-19 (20 jobs)
+#   Batch 2: sbatch --array=20-32 twcc/submit_phase1.sh       # array 20-32 (13 jobs)
+#   ※ Batch 2 在 Batch 1 部分跑完後再提交
+#
+# 也可以按實驗拆：
+#   sbatch --array=0-8  twcc/submit_phase1.sh   # 只跑 Exp A (9)
+#   sbatch --array=9-11 twcc/submit_phase1.sh   # 只跑 Exp A' (3)
+#   sbatch --array=12-23 twcc/submit_phase1.sh  # 只跑 Exp B (12)
+#   sbatch --array=24-32 twcc/submit_phase1.sh  # 只跑 Exp C (9)
 #
 # 跑完後確認安全:
 #   bash twcc/check_billing_safe.sh
@@ -28,11 +32,11 @@
 #SBATCH --account=ACD114197             # ← 改成你的計畫 ID
 #SBATCH --partition=gp1d
 #SBATCH --nodes=1
-#SBATCH --ntasks=1
+#SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:1
 #SBATCH --time=06:00:00                  # V100 實測: N=50 ~3.5hr, N=80 ~5.5hr, 硬上限 6hr
-#SBATCH --array=0-32
+#SBATCH --array=0-19                     # ← Batch 1 (TWCC 限制 ~20 jobs)，Batch 2 用 --array=20-32
 #SBATCH --output=results/logs/phase1_%A_%a.log
 #SBATCH --error=results/logs/phase1_%A_%a.err
 #SBATCH --mail-type=END,FAIL
