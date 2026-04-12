@@ -28,7 +28,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:1
-#SBATCH --time=00:45:00                  # 每個 run ~15min, 硬上限 45min (超時自動 kill)
+#SBATCH --time=05:00:00                  # V100 實測: N=50 ~3.5hr, α=0.1 可能稍慢, 硬上限 5hr
 #SBATCH --array=0-11
 #SBATCH --output=results/logs/phase3_%A_%a.log
 #SBATCH --error=results/logs/phase3_%A_%a.err

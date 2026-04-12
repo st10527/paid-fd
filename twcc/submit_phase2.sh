@@ -26,7 +26,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:1
-#SBATCH --time=00:30:00                  # CIFAR-10 ~10min, 硬上限 30min (超時自動 kill)
+#SBATCH --time=03:00:00                  # CIFAR-10 (10 classes) 比 CIFAR-100 快, 預估 ~2hr, 硬上限 3hr
 #SBATCH --array=0-8
 #SBATCH --output=results/logs/phase2_%A_%a.log
 #SBATCH --error=results/logs/phase2_%A_%a.err

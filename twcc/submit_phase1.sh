@@ -3,14 +3,15 @@
 # TMC Phase 1: Core Experiments (33 runs)
 # ============================================================
 # 💰 計費安全：這是 sbatch 批次作業，跑完自動結束，不會持續扣款
-#    --time=00:45:00 硬上限 → 超時強制 kill → 不可能忘記關
+#    --time=06:00:00 硬上限 → 超時強制 kill → 不可能忘記關
 #
 # Exp A:  Privacy-preserving comparison (9)   — Fixed-ε, CSRA
 # Exp A': No-privacy reference (3)            — FedAvg, FedMD, FedGMKD
 # Exp B:  N sweep / scalability (12)          — N={20,80} × γ={3,10}
 # Exp C:  Ablation study (9)                  — BLUE off, full-part, oracle
 #
-# Est. time: ~15 min/run, 硬上限 45 min
+# V100 實測：5 rounds = 13 min → 100 rounds ≈ 3.5 hr (N=50), ~5.5 hr (N=80)
+# 硬上限 6 小時，留 buffer
 #
 # Usage:
 #   sbatch twcc/submit_phase1.sh               # 全部 33 個
@@ -30,7 +31,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:1
-#SBATCH --time=00:45:00                  # 每個 run ~15min, 硬上限 45min (超時自動 kill)
+#SBATCH --time=06:00:00                  # V100 實測: N=50 ~3.5hr, N=80 ~5.5hr, 硬上限 6hr
 #SBATCH --array=0-32
 #SBATCH --output=results/logs/phase1_%A_%a.log
 #SBATCH --error=results/logs/phase1_%A_%a.err
