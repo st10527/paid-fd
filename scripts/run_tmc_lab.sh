@@ -45,7 +45,7 @@ for TASK_ID in $(seq $START $END); do
     echo ""
     echo "-------- Task $TASK_ID / $END --------"
     
-    python scripts/run_tmc_experiment.py \
+    python -u scripts/run_tmc_experiment.py \
         --phase $PHASE \
         --task-id $TASK_ID \
         --device $DEVICE \
