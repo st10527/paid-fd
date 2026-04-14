@@ -403,6 +403,8 @@ def _create_method(method_name: str, model, config: dict, device: str, num_class
             use_mixed_loss=mc.get('use_mixed_loss', True),
             use_ldp=mc.get('use_ldp', True),
             use_denoising=mc.get('use_denoising', False),
+            # Fair Fixed-ε mode: fixed_epsilon > 0 bypasses game
+            fixed_epsilon=mc.get('fixed_epsilon', 0.0),
         )
         return PAIDFD(m, cfg, num_classes, device)
     

@@ -97,6 +97,12 @@ class PAIDFDConfig:
     use_ldp: bool = True         # LDP noise vs clean logits (oracle)
     use_denoising: bool = False  # Class-conditional denoising (v8.2, optional)
 
+    # Fair comparison mode: bypass Stackelberg game, use fixed epsilon
+    # When > 0, ALL devices participate with this fixed epsilon.
+    # Pipeline (persistent models, EMA, mixed loss, persistent Adam) stays identical.
+    # This isolates the game's contribution from the pipeline's contribution.
+    fixed_epsilon: float = 0.0
+
     # Legacy compat (v9.x params ignored but accepted)
     ce_anchor_alpha: float = 0.0
     self_anchor_alpha: float = 0.0
@@ -171,10 +177,29 @@ class PAIDFD(FederatedMethod):
             self._pretrain_on_public(public_loader)
             self._pretrained = True
 
-        # Stage 1: Stackelberg game
-        game_result = self.solver.solve(devices)
-        price = game_result["price"]
-        decisions = game_result["decisions"]
+        # Stage 1: Stackelberg game (or fixed-epsilon bypass)
+        if self.config.fixed_epsilon > 0:
+            # Fair Fixed-ε mode: skip game, all devices participate
+            from src.game.stackelberg import DeviceDecision
+            fixed_eps = self.config.fixed_epsilon
+            decisions = [
+                DeviceDecision(
+                    device_id=i, participates=True,
+                    s_star=100.0, eps_star=fixed_eps,
+                    quality=1.0, utility=0.0
+                ) for i in range(len(devices))
+            ]
+            price = 0.0
+            game_result = {
+                "price": 0.0, "decisions": decisions,
+                "avg_s": 100.0, "avg_eps": fixed_eps,
+                "server_utility": 0.0, "total_quality": len(devices),
+                "total_payment": 0.0,
+            }
+        else:
+            game_result = self.solver.solve(devices)
+            price = game_result["price"]
+            decisions = game_result["decisions"]
         self.price_history.append(price)
 
         # Collect public images and labels

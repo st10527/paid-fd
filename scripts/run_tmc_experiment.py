@@ -319,12 +319,102 @@ def build_phase3():
 
 
 # ============================================================
+# PHASE 4: Reviewer-defense experiments (12 runs)
+# F: Fair Fixed-ε (same PAID-FD pipeline, fixed epsilon) (3 runs)
+# G: ε sweep for privacy-utility curve (6 runs)
+# H: Heterogeneous-λ BLUE validation (3 runs)
+# ============================================================
+
+def build_phase4():
+    """12 runs — critical experiments to counter reviewer attacks."""
+    configs = []
+
+    # ---- Exp F: Fair Fixed-ε ----
+    # Same pipeline as PAID-FD (persistent models, EMA, mixed loss, persistent Adam)
+    # but with fixed epsilon instead of Stackelberg game.
+    # This isolates the game's contribution from the pipeline's contribution.
+    # Reviewer attack: "Gains come from pipeline, not game."
+    # Defense: If Fair-Fixed-ε < PAID-FD, game has genuine contribution.
+    for eps in [1, 3, 5]:
+        mc = {**PAID_FD_METHOD, 'gamma': 5,
+              'fixed_epsilon': float(eps),
+              'use_blue': False}  # equal weights since all eps are same
+        configs.append({
+            'label': 'expF_faireps%d_s42' % eps,
+            'exp': 'F', 'method': 'PAID-FD',
+            'seed': 42,
+            'config': make_training_config(gamma=5, method_config=mc),
+            'desc': 'Fair Fixed-ε=%d (PAID-FD pipeline)' % eps,
+        })
+
+    # ---- Exp G: Privacy-utility curve ----
+    # ε ∈ {0.1, 0.5, 1, 2, 5, 10} × seed=42
+    # Plots the standard privacy-utility tradeoff curve (reviewer must-have).
+    # Uses PAID-FD pipeline with fixed epsilon to show noise impact.
+    for eps_val in [0.1, 0.5, 1.0, 2.0, 5.0, 10.0]:
+        eps_label = str(eps_val).replace('.', 'p')
+        mc = {**PAID_FD_METHOD, 'gamma': 5,
+              'fixed_epsilon': eps_val,
+              'use_blue': False}
+        configs.append({
+            'label': 'expG_eps%s_s42' % eps_label,
+            'exp': 'G', 'method': 'PAID-FD',
+            'seed': 42,
+            'config': make_training_config(gamma=5, method_config=mc),
+            'desc': 'Privacy-utility: ε=%.1f' % eps_val,
+        })
+
+    # ---- Exp H: Heterogeneous-λ BLUE validation ----
+    # High λ diversity (lambda_mult=5.0) → wider eps_star range → BLUE matters.
+    # Compare BLUE-on vs BLUE-off under heterogeneous privacy regime.
+    # Defense: "BLUE degenerates to uniform in homogeneous regime (Prop 6)
+    #           but provides significant gains under heterogeneity."
+
+    # H1: PAID-FD with BLUE under heterogeneous λ
+    mc_blue = {**PAID_FD_METHOD, 'gamma': 5, 'use_blue': True}
+    configs.append({
+        'label': 'expH_hetlam_blue_s42',
+        'exp': 'H', 'method': 'PAID-FD',
+        'seed': 42,
+        'config': make_training_config(gamma=5, lambda_mult=5.0,
+                                       method_config=mc_blue),
+        'desc': 'Hetero-λ (×5) with BLUE',
+    })
+
+    # H2: PAID-FD without BLUE under heterogeneous λ
+    mc_noblue = {**PAID_FD_METHOD, 'gamma': 5, 'use_blue': False}
+    configs.append({
+        'label': 'expH_hetlam_noblue_s42',
+        'exp': 'H', 'method': 'PAID-FD',
+        'seed': 42,
+        'config': make_training_config(gamma=5, lambda_mult=5.0,
+                                       method_config=mc_noblue),
+        'desc': 'Hetero-λ (×5) without BLUE',
+    })
+
+    # H3: Baseline (original homogeneous λ with BLUE) for reference
+    mc_base = {**PAID_FD_METHOD, 'gamma': 5, 'use_blue': True}
+    configs.append({
+        'label': 'expH_homlam_blue_s42',
+        'exp': 'H', 'method': 'PAID-FD',
+        'seed': 42,
+        'config': make_training_config(gamma=5, lambda_mult=1.0,
+                                       method_config=mc_base),
+        'desc': 'Homo-λ (baseline) with BLUE',
+    })
+
+    assert len(configs) == 12, "Phase 4 should have 12 configs, got %d" % len(configs)
+    return configs
+
+
+# ============================================================
 # All phases
 # ============================================================
 ALL_PHASES = {
     1: build_phase1,
     2: build_phase2,
     3: build_phase3,
+    4: build_phase4,
 }
 
 
@@ -377,7 +467,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="TMC Paper — Master Experiment Runner")
     parser.add_argument("--phase", type=int, required=True,
-                        choices=[1, 2, 3], help="Phase number")
+                        choices=[1, 2, 3, 4], help="Phase number")
     parser.add_argument("--task-id", type=int, default=None,
                         help="Task ID (0-indexed) for SLURM array")
     parser.add_argument("--list", action="store_true",
