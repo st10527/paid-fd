@@ -95,6 +95,7 @@ class PAIDFDConfig:
     use_ema: bool = True         # EMA logit buffer vs single-round
     use_mixed_loss: bool = True  # Mixed loss vs pure KL
     use_ldp: bool = True         # LDP noise vs clean logits (oracle)
+    persistent_local_models: bool = True  # Keep local models across rounds vs fresh copy each round
     use_denoising: bool = False  # Class-conditional denoising (v8.2, optional)
 
     # Fair comparison mode: bypass Stackelberg game, use fixed epsilon
@@ -231,6 +232,10 @@ class PAIDFD(FederatedMethod):
             local_loader = client_loaders[dev_id]
 
             # v10: Persistent local model (initialized from server on first use)
+            # Ablation: reset each round if persistent_local_models=False
+            if not self.config.persistent_local_models and dev_id in self.local_models:
+                del self.local_models[dev_id]
+                del self.local_optimizers[dev_id]
             if dev_id not in self.local_models:
                 self.local_models[dev_id] = copy_model(
                     self.server_model, device=self.device)

@@ -408,6 +408,54 @@ def build_phase4():
 
 
 # ============================================================
+# PHASE 5: Pipeline Internal Ablation (3 runs)
+# I: No EMA / No Mixed Loss / No Persistent Models
+# ============================================================
+
+def build_phase5():
+    """Pipeline component ablation: each run disables ONE component."""
+    configs = []
+
+    # Ablation 1: No EMA (single-round logits, no cross-round averaging)
+    mc = dict(PAID_FD_METHOD)
+    mc['use_ema'] = False
+    configs.append({
+        'label': 'expI_noEMA_s42',
+        'exp': 'I',
+        'method': 'PAID-FD',
+        'seed': 42,
+        'desc': 'No EMA (single-round logits)',
+        'config': make_training_config(gamma=5.0, method_config=mc),
+    })
+
+    # Ablation 2: No Mixed Loss (pure KL, no CE anchor)
+    mc2 = dict(PAID_FD_METHOD)
+    mc2['use_mixed_loss'] = False
+    configs.append({
+        'label': 'expI_noMixedLoss_s42',
+        'exp': 'I',
+        'method': 'PAID-FD',
+        'seed': 42,
+        'desc': 'No mixed loss (pure KL distillation)',
+        'config': make_training_config(gamma=5.0, method_config=mc2),
+    })
+
+    # Ablation 3: No Persistent Models (fresh copy from server each round)
+    mc3 = dict(PAID_FD_METHOD)
+    mc3['persistent_local_models'] = False
+    configs.append({
+        'label': 'expI_noPersistent_s42',
+        'exp': 'I',
+        'method': 'PAID-FD',
+        'seed': 42,
+        'desc': 'No persistent local models (fresh each round)',
+        'config': make_training_config(gamma=5.0, method_config=mc3),
+    })
+
+    return configs
+
+
+# ============================================================
 # All phases
 # ============================================================
 ALL_PHASES = {
@@ -415,6 +463,7 @@ ALL_PHASES = {
     2: build_phase2,
     3: build_phase3,
     4: build_phase4,
+    5: build_phase5,
 }
 
 
@@ -467,7 +516,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="TMC Paper — Master Experiment Runner")
     parser.add_argument("--phase", type=int, required=True,
-                        choices=[1, 2, 3, 4], help="Phase number")
+                        choices=[1, 2, 3, 4, 5], help="Phase number")
     parser.add_argument("--task-id", type=int, default=None,
                         help="Task ID (0-indexed) for SLURM array")
     parser.add_argument("--list", action="store_true",

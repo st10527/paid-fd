@@ -403,6 +403,7 @@ def _create_method(method_name: str, model, config: dict, device: str, num_class
             use_mixed_loss=mc.get('use_mixed_loss', True),
             use_ldp=mc.get('use_ldp', True),
             use_denoising=mc.get('use_denoising', False),
+            persistent_local_models=mc.get('persistent_local_models', True),
             # Fair Fixed-ε mode: fixed_epsilon > 0 bypasses game
             fixed_epsilon=mc.get('fixed_epsilon', 0.0),
         )
