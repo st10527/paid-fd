@@ -412,18 +412,24 @@ def build_phase4():
 # I: No EMA / No Mixed Loss / No Persistent Models
 # ============================================================
 
-def build_phase5():
-    """Pipeline component ablation: each run disables ONE component."""
+def build_phase5(seed: int = 42):
+    """Pipeline component ablation: each run disables ONE component.
+
+    Args:
+        seed: Random seed for reproducibility (default 42; use 123/456 for
+              multi-seed validation).  The output label includes ``_s{seed}``.
+    """
     configs = []
+    s = seed
 
     # Ablation 1: No EMA (single-round logits, no cross-round averaging)
     mc = dict(PAID_FD_METHOD)
     mc['use_ema'] = False
     configs.append({
-        'label': 'expI_noEMA_s42',
+        'label': 'expI_noEMA_s%d' % s,
         'exp': 'I',
         'method': 'PAID-FD',
-        'seed': 42,
+        'seed': s,
         'desc': 'No EMA (single-round logits)',
         'config': make_training_config(gamma=5.0, method_config=mc),
     })
@@ -432,10 +438,10 @@ def build_phase5():
     mc2 = dict(PAID_FD_METHOD)
     mc2['use_mixed_loss'] = False
     configs.append({
-        'label': 'expI_noMixedLoss_s42',
+        'label': 'expI_noMixedLoss_s%d' % s,
         'exp': 'I',
         'method': 'PAID-FD',
-        'seed': 42,
+        'seed': s,
         'desc': 'No mixed loss (pure KL distillation)',
         'config': make_training_config(gamma=5.0, method_config=mc2),
     })
@@ -444,10 +450,10 @@ def build_phase5():
     mc3 = dict(PAID_FD_METHOD)
     mc3['persistent_local_models'] = False
     configs.append({
-        'label': 'expI_noPersistent_s42',
+        'label': 'expI_noPersistent_s%d' % s,
         'exp': 'I',
         'method': 'PAID-FD',
-        'seed': 42,
+        'seed': s,
         'desc': 'No persistent local models (fresh each round)',
         'config': make_training_config(gamma=5.0, method_config=mc3),
     })
@@ -463,7 +469,7 @@ ALL_PHASES = {
     2: build_phase2,
     3: build_phase3,
     4: build_phase4,
-    5: build_phase5,
+    5: build_phase5,   # accepts optional seed= kwarg
 }
 
 
@@ -525,9 +531,15 @@ def main():
                         help="Show config without executing")
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--rounds", type=int, default=100)
+    parser.add_argument("--seed", type=int, default=None,
+                        help="Override seed for phase 5 (default: use hard-coded 42)")
     args = parser.parse_args()
 
-    configs = ALL_PHASES[args.phase]()
+    # Phase 5 supports explicit seed override
+    if args.phase == 5 and args.seed is not None:
+        configs = build_phase5(seed=args.seed)
+    else:
+        configs = ALL_PHASES[args.phase]()
 
     # ---- List mode ----
     if args.list:

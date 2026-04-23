@@ -1,0 +1,5 @@
+ablation,n_seeds,mean_pct,std_pct,delta_pp,classification,s42_pct,s123_pct,s456_pct
+v10.1-baseline-g5,3,60.8033,0.2538,0.0,baseline,60.52,60.88,61.01
+noEMA,1,60.55,,-0.2533,negligible,60.55,,
+noMixedLoss,1,15.49,,-45.3133,**significant**,15.49,,
+noPersistent,1,63.55,,2.7467,**significant**,63.55,,
