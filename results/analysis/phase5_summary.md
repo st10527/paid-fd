@@ -18,17 +18,17 @@
 
 | Ablation | n seeds | Mean (final_acc) | Std | Δ (pp) | Classification |
 |----------|---------|-----------|-----|--------|----------------|
-| No EMA | 1/3 | 60.55% | — | -0.25 | negligible |
-| No Mixed Loss | 1/3 | 15.49% | — | -45.31 | **significant** |
-| No Persistent Models | 1/3 | 63.55% | — | +2.75 | **significant** |
+| No EMA | 3/3 | 60.89% | 0.30% | +0.09 | negligible |
+| No Mixed Loss | 3/3 | 15.75% | 0.73% | -45.05 | **significant** |
+| No Persistent Models | 3/3 | 63.43% | 0.13% | +2.62 | **significant** |
 
 ---
 
 ## Per-Seed Detail
 
-**No EMA**: s42=60.55%  s123=MISSING  s456=MISSING
-**No Mixed Loss**: s42=15.49%  s123=MISSING  s456=MISSING
-**No Persistent Models**: s42=63.55%  s123=MISSING  s456=MISSING
+**No EMA**: s42=60.55%  s123=61.04%  s456=61.09%
+**No Mixed Loss**: s42=15.49%  s123=15.19%  s456=16.57%
+**No Persistent Models**: s42=63.55%  s123=63.43%  s456=63.30%
 
 ---
 

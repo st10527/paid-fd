@@ -3553,3 +3553,296 @@ Using device: cuda
   Saved to results/experiments/v9_1_distill_fix.json
 
 v9.1 sweep complete!
+============================================================
+  Phase 5 Multi-Seed Full Run
+  Device  : cuda:0
+  Log     : results/logs/phase5_nohup_20260423_0947.log
+  Started : Thu Apr 23 09:47:15 CST 2026
+  PID     : 168582
+============================================================
+
+──────────────────────────────────────────────────
+  Run 1/6 : seed=123  ablation=noEMA
+  Output : results/experiments/tmc/expI_noEMA_s123.json
+  Time   : Thu Apr 23 09:47:15 CST 2026
+──────────────────────────────────────────────────
+======================================================================
+  TMC Experiment — Phase 5, Task 1/3
+  Label:  expI_noEMA_s123
+  Method: PAID-FD
+  Seed:   123
+  Desc:   No EMA (single-round logits)
+  Device: cuda:0
+======================================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2865
+    Epoch 10/10: loss=1.8170
+  [Pre-training] Done.
+    Round   0/100: acc=0.3884, loss=2.6227, part=0.76, p*=3.267, ε*=2.84, Σcost=279.1, Σε=2.8
+    Round  10/100: acc=0.4983, loss=2.1344, part=0.76, p*=3.267, ε*=2.84, Σcost=3070.3, Σε=31.2
+    Round  20/100: acc=0.5720, loss=1.9048, part=0.76, p*=3.267, ε*=2.84, Σcost=5861.4, Σε=59.5
+    Round  30/100: acc=0.5976, loss=1.8250, part=0.76, p*=3.267, ε*=2.84, Σcost=8652.6, Σε=87.9
+    Round  40/100: acc=0.6016, loss=1.8484, part=0.76, p*=3.267, ε*=2.84, Σcost=11443.7, Σε=116.2
+    Round  50/100: acc=0.5990, loss=1.8680, part=0.76, p*=3.267, ε*=2.84, Σcost=14234.9, Σε=144.6
+    Round  60/100: acc=0.6011, loss=1.8583, part=0.76, p*=3.267, ε*=2.84, Σcost=17026.0, Σε=173.0
+    Round  70/100: acc=0.6099, loss=1.8588, part=0.76, p*=3.267, ε*=2.84, Σcost=19817.2, Σε=201.3
+    Round  80/100: acc=0.6101, loss=1.8627, part=0.76, p*=3.267, ε*=2.84, Σcost=22608.3, Σε=229.7
+    Round  90/100: acc=0.6165, loss=1.8586, part=0.76, p*=3.267, ε*=2.84, Σcost=25399.5, Σε=258.0
+    Round  99/100: acc=0.6104, loss=1.8937, part=0.76, p*=3.267, ε*=2.84, Σcost=27911.5, Σε=283.5
+  💾 Saved: results/experiments/tmc/expI_noEMA_s123.json
+
+======================================================================
+  DONE: expI_noEMA_s123
+  best=61.84%  final=61.04%  part=76%  cost=27911
+  time=8617s (143.6 min)
+  saved: results/experiments/tmc/expI_noEMA_s123.json
+======================================================================
+  Finished: Thu Apr 23 12:10:52 CST 2026
+
+──────────────────────────────────────────────────
+  Run 2/6 : seed=123  ablation=noMixedLoss
+  Output : results/experiments/tmc/expI_noMixedLoss_s123.json
+  Time   : Thu Apr 23 12:10:52 CST 2026
+──────────────────────────────────────────────────
+======================================================================
+  TMC Experiment — Phase 5, Task 2/3
+  Label:  expI_noMixedLoss_s123
+  Method: PAID-FD
+  Seed:   123
+  Desc:   No mixed loss (pure KL distillation)
+  Device: cuda:0
+======================================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2865
+    Epoch 10/10: loss=1.8170
+  [Pre-training] Done.
+    Round   0/100: acc=0.3175, loss=3.1476, part=0.76, p*=3.267, ε*=2.84, Σcost=279.1, Σε=2.8
+    Round  10/100: acc=0.2363, loss=3.3296, part=0.76, p*=3.267, ε*=2.84, Σcost=3070.3, Σε=31.2
+    Round  20/100: acc=0.1899, loss=3.3792, part=0.76, p*=3.267, ε*=2.84, Σcost=5861.4, Σε=59.5
+    Round  30/100: acc=0.1684, loss=3.3961, part=0.76, p*=3.267, ε*=2.84, Σcost=8652.6, Σε=87.9
+    Round  40/100: acc=0.1517, loss=3.4306, part=0.76, p*=3.267, ε*=2.84, Σcost=11443.7, Σε=116.2
+    Round  50/100: acc=0.1522, loss=3.4124, part=0.76, p*=3.267, ε*=2.84, Σcost=14234.9, Σε=144.6
+    Round  60/100: acc=0.1518, loss=3.4022, part=0.76, p*=3.267, ε*=2.84, Σcost=17026.0, Σε=173.0
+    Round  70/100: acc=0.1474, loss=3.4034, part=0.76, p*=3.267, ε*=2.84, Σcost=19817.2, Σε=201.3
+    Round  80/100: acc=0.1533, loss=3.4015, part=0.76, p*=3.267, ε*=2.84, Σcost=22608.3, Σε=229.7
+    Round  90/100: acc=0.1469, loss=3.4103, part=0.76, p*=3.267, ε*=2.84, Σcost=25399.5, Σε=258.0
+    Round  99/100: acc=0.1519, loss=3.4025, part=0.76, p*=3.267, ε*=2.84, Σcost=27911.5, Σε=283.5
+  💾 Saved: results/experiments/tmc/expI_noMixedLoss_s123.json
+
+======================================================================
+  DONE: expI_noMixedLoss_s123
+  best=34.93%  final=15.19%  part=76%  cost=27911
+  time=8678s (144.6 min)
+  saved: results/experiments/tmc/expI_noMixedLoss_s123.json
+======================================================================
+  Finished: Thu Apr 23 14:35:31 CST 2026
+
+──────────────────────────────────────────────────
+  Run 3/6 : seed=123  ablation=noPersistent
+  Output : results/experiments/tmc/expI_noPersistent_s123.json
+  Time   : Thu Apr 23 14:35:31 CST 2026
+──────────────────────────────────────────────────
+======================================================================
+  TMC Experiment — Phase 5, Task 3/3
+  Label:  expI_noPersistent_s123
+  Method: PAID-FD
+  Seed:   123
+  Desc:   No persistent local models (fresh each round)
+  Device: cuda:0
+======================================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2865
+    Epoch 10/10: loss=1.8170
+  [Pre-training] Done.
+    Round   0/100: acc=0.3884, loss=2.6227, part=0.76, p*=3.267, ε*=2.84, Σcost=279.1, Σε=2.8
+    Round  10/100: acc=0.5092, loss=2.1004, part=0.76, p*=3.267, ε*=2.84, Σcost=3070.3, Σε=31.2
+    Round  20/100: acc=0.5885, loss=1.8604, part=0.76, p*=3.267, ε*=2.84, Σcost=5861.4, Σε=59.5
+    Round  30/100: acc=0.6049, loss=1.7967, part=0.76, p*=3.267, ε*=2.84, Σcost=8652.6, Σε=87.9
+    Round  40/100: acc=0.6165, loss=1.7970, part=0.76, p*=3.267, ε*=2.84, Σcost=11443.7, Σε=116.2
+    Round  50/100: acc=0.6217, loss=1.7899, part=0.76, p*=3.267, ε*=2.84, Σcost=14234.9, Σε=144.6
+    Round  60/100: acc=0.6229, loss=1.7903, part=0.76, p*=3.267, ε*=2.84, Σcost=17026.0, Σε=173.0
+    Round  70/100: acc=0.6306, loss=1.7995, part=0.76, p*=3.267, ε*=2.84, Σcost=19817.2, Σε=201.3
+    Round  80/100: acc=0.6280, loss=1.7734, part=0.76, p*=3.267, ε*=2.84, Σcost=22608.3, Σε=229.7
+    Round  90/100: acc=0.6315, loss=1.7989, part=0.76, p*=3.267, ε*=2.84, Σcost=25399.5, Σε=258.0
+    Round  99/100: acc=0.6343, loss=1.7938, part=0.76, p*=3.267, ε*=2.84, Σcost=27911.5, Σε=283.5
+  💾 Saved: results/experiments/tmc/expI_noPersistent_s123.json
+
+======================================================================
+  DONE: expI_noPersistent_s123
+  best=64.22%  final=63.43%  part=76%  cost=27911
+  time=8706s (145.1 min)
+  saved: results/experiments/tmc/expI_noPersistent_s123.json
+======================================================================
+  Finished: Thu Apr 23 17:00:37 CST 2026
+
+──────────────────────────────────────────────────
+  Run 4/6 : seed=456  ablation=noEMA
+  Output : results/experiments/tmc/expI_noEMA_s456.json
+  Time   : Thu Apr 23 17:00:37 CST 2026
+──────────────────────────────────────────────────
+======================================================================
+  TMC Experiment — Phase 5, Task 1/3
+  Label:  expI_noEMA_s456
+  Method: PAID-FD
+  Seed:   456
+  Desc:   No EMA (single-round logits)
+  Device: cuda:0
+======================================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2292
+    Epoch 10/10: loss=1.7987
+  [Pre-training] Done.
+    Round   0/100: acc=0.3913, loss=2.5594, part=0.80, p*=3.464, ε*=2.90, Σcost=319.9, Σε=2.9
+    Round  10/100: acc=0.5182, loss=2.0625, part=0.80, p*=3.464, ε*=2.90, Σcost=3518.6, Σε=31.9
+    Round  20/100: acc=0.5605, loss=1.9169, part=0.80, p*=3.464, ε*=2.90, Σcost=6717.3, Σε=60.9
+    Round  30/100: acc=0.5858, loss=1.8798, part=0.80, p*=3.464, ε*=2.90, Σcost=9916.0, Σε=89.9
+    Round  40/100: acc=0.5952, loss=1.8685, part=0.80, p*=3.464, ε*=2.90, Σcost=13114.7, Σε=118.9
+    Round  50/100: acc=0.5988, loss=1.9089, part=0.80, p*=3.464, ε*=2.90, Σcost=16313.4, Σε=148.0
+    Round  60/100: acc=0.5992, loss=1.9059, part=0.80, p*=3.464, ε*=2.90, Σcost=19512.1, Σε=177.0
+    Round  70/100: acc=0.6097, loss=1.8886, part=0.80, p*=3.464, ε*=2.90, Σcost=22710.9, Σε=206.0
+    Round  80/100: acc=0.6079, loss=1.9094, part=0.80, p*=3.464, ε*=2.90, Σcost=25909.6, Σε=235.0
+    Round  90/100: acc=0.6120, loss=1.8983, part=0.80, p*=3.464, ε*=2.90, Σcost=29108.3, Σε=264.0
+    Round  99/100: acc=0.6109, loss=1.8982, part=0.80, p*=3.464, ε*=2.90, Σcost=31987.1, Σε=290.1
+  💾 Saved: results/experiments/tmc/expI_noEMA_s456.json
+
+======================================================================
+  DONE: expI_noEMA_s456
+  best=61.41%  final=61.09%  part=80%  cost=31987
+  time=8905s (148.4 min)
+  saved: results/experiments/tmc/expI_noEMA_s456.json
+======================================================================
+  Finished: Thu Apr 23 19:29:03 CST 2026
+
+──────────────────────────────────────────────────
+  Run 5/6 : seed=456  ablation=noMixedLoss
+  Output : results/experiments/tmc/expI_noMixedLoss_s456.json
+  Time   : Thu Apr 23 19:29:03 CST 2026
+──────────────────────────────────────────────────
+======================================================================
+  TMC Experiment — Phase 5, Task 2/3
+  Label:  expI_noMixedLoss_s456
+  Method: PAID-FD
+  Seed:   456
+  Desc:   No mixed loss (pure KL distillation)
+  Device: cuda:0
+======================================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2292
+    Epoch 10/10: loss=1.7987
+  [Pre-training] Done.
+    Round   0/100: acc=0.3516, loss=3.0672, part=0.80, p*=3.464, ε*=2.90, Σcost=319.9, Σε=2.9
+    Round  10/100: acc=0.2362, loss=3.3255, part=0.80, p*=3.464, ε*=2.90, Σcost=3518.6, Σε=31.9
+    Round  20/100: acc=0.1776, loss=3.4084, part=0.80, p*=3.464, ε*=2.90, Σcost=6717.3, Σε=60.9
+    Round  30/100: acc=0.1605, loss=3.4230, part=0.80, p*=3.464, ε*=2.90, Σcost=9916.0, Σε=89.9
+    Round  40/100: acc=0.1521, loss=3.4147, part=0.80, p*=3.464, ε*=2.90, Σcost=13114.7, Σε=118.9
+    Round  50/100: acc=0.1535, loss=3.4231, part=0.80, p*=3.464, ε*=2.90, Σcost=16313.4, Σε=148.0
+    Round  60/100: acc=0.1532, loss=3.4217, part=0.80, p*=3.464, ε*=2.90, Σcost=19512.1, Σε=177.0
+    Round  70/100: acc=0.1553, loss=3.4254, part=0.80, p*=3.464, ε*=2.90, Σcost=22710.9, Σε=206.0
+    Round  80/100: acc=0.1587, loss=3.4116, part=0.80, p*=3.464, ε*=2.90, Σcost=25909.6, Σε=235.0
+    Round  90/100: acc=0.1688, loss=3.3924, part=0.80, p*=3.464, ε*=2.90, Σcost=29108.3, Σε=264.0
+    Round  99/100: acc=0.1657, loss=3.4024, part=0.80, p*=3.464, ε*=2.90, Σcost=31987.1, Σε=290.1
+  💾 Saved: results/experiments/tmc/expI_noMixedLoss_s456.json
+
+======================================================================
+  DONE: expI_noMixedLoss_s456
+  best=35.16%  final=16.57%  part=80%  cost=31987
+  time=8914s (148.6 min)
+  saved: results/experiments/tmc/expI_noMixedLoss_s456.json
+======================================================================
+  Finished: Thu Apr 23 21:57:37 CST 2026
+
+──────────────────────────────────────────────────
+  Run 6/6 : seed=456  ablation=noPersistent
+  Output : results/experiments/tmc/expI_noPersistent_s456.json
+  Time   : Thu Apr 23 21:57:37 CST 2026
+──────────────────────────────────────────────────
+======================================================================
+  TMC Experiment — Phase 5, Task 3/3
+  Label:  expI_noPersistent_s456
+  Method: PAID-FD
+  Seed:   456
+  Desc:   No persistent local models (fresh each round)
+  Device: cuda:0
+======================================================================
+[TMC Safe Mode] Split Report:
+  Public (Server):  20000 samples (from Train)
+  Private (Users):  30000 samples (from Train)
+  Test (Evaluation):10000 samples (from Test)
+  [Pre-training] 10 epochs on public data ...
+    Epoch 1/10: loss=4.2292
+    Epoch 10/10: loss=1.7987
+  [Pre-training] Done.
+    Round   0/100: acc=0.3913, loss=2.5594, part=0.80, p*=3.464, ε*=2.90, Σcost=319.9, Σε=2.9
+    Round  10/100: acc=0.5276, loss=2.0553, part=0.80, p*=3.464, ε*=2.90, Σcost=3518.6, Σε=31.9
+    Round  20/100: acc=0.5779, loss=1.8481, part=0.80, p*=3.464, ε*=2.90, Σcost=6717.3, Σε=60.9
+    Round  30/100: acc=0.6005, loss=1.8102, part=0.80, p*=3.464, ε*=2.90, Σcost=9916.0, Σε=89.9
+    Round  40/100: acc=0.6205, loss=1.7964, part=0.80, p*=3.464, ε*=2.90, Σcost=13114.7, Σε=118.9
+    Round  50/100: acc=0.6199, loss=1.8317, part=0.80, p*=3.464, ε*=2.90, Σcost=16313.4, Σε=148.0
+    Round  60/100: acc=0.6218, loss=1.8221, part=0.80, p*=3.464, ε*=2.90, Σcost=19512.1, Σε=177.0
+    Round  70/100: acc=0.6258, loss=1.8551, part=0.80, p*=3.464, ε*=2.90, Σcost=22710.9, Σε=206.0
+    Round  80/100: acc=0.6396, loss=1.8182, part=0.80, p*=3.464, ε*=2.90, Σcost=25909.6, Σε=235.0
+    Round  90/100: acc=0.6338, loss=1.8152, part=0.80, p*=3.464, ε*=2.90, Σcost=29108.3, Σε=264.0
+    Round  99/100: acc=0.6330, loss=1.8136, part=0.80, p*=3.464, ε*=2.90, Σcost=31987.1, Σε=290.1
+  💾 Saved: results/experiments/tmc/expI_noPersistent_s456.json
+
+======================================================================
+  DONE: expI_noPersistent_s456
+  best=63.96%  final=63.30%  part=80%  cost=31987
+  time=8996s (149.9 min)
+  saved: results/experiments/tmc/expI_noPersistent_s456.json
+======================================================================
+  Finished: Fri Apr 24 00:27:34 CST 2026
+
+============================================================
+  ALL 6 RUNS COMPLETE — Fri Apr 24 00:27:34 CST 2026
+  Running analysis...
+============================================================
+v10.1 Baseline (γ=5, final_acc):
+  seed=42 : 0.6052
+  seed=123 : 0.6088
+  seed=456 : 0.6101
+  mean=60.80%  std=0.25%  (n=3 seeds)
+
+Ablation: noEMA (No EMA)
+  Seeds run: 3/3
+  Per-seed:  s42=60.55%  s123=61.04%  s456=61.09%
+  Mean:      60.89% ±0.30%
+  Δ vs base: +0.09 pp  → negligible
+
+Ablation: noMixedLoss (No Mixed Loss)
+  Seeds run: 3/3
+  Per-seed:  s42=15.49%  s123=15.19%  s456=16.57%
+  Mean:      15.75% ±0.73%
+  Δ vs base: -45.05 pp  → **significant**
+
+Ablation: noPersistent (No Persistent Models)
+  Seeds run: 3/3
+  Per-seed:  s42=63.55%  s123=63.43%  s456=63.30%
+  Mean:      63.43% ±0.13%
+  Δ vs base: +2.62 pp  → **significant**
+
+Wrote: results/analysis/phase5_summary.md
+Wrote: results/analysis/phase5_summary.csv
+
+  Analysis written to results/analysis/
+  Done.
