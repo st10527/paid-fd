@@ -64,6 +64,61 @@ LOG_DIR = ROOT / "results" / "logs"
 # ── phase sizes (must match run_tmc_experiment.py) ─────────────────────────
 PHASE_SIZES = {1: 33, 2: 9, 3: 12, 4: 12, 5: 3}
 
+# ── which task-ids in each phase are PAID-FD (use cubic solver) ─────────────
+# Phase 1: task  0-11 = Fixed-eps-1/3, CSRA, FedAvg/MD/GMKD  → SKIP (reuse tmc/)
+#           task 12-32 = PAID-FD expB + expC                  → RUN
+# Phase 2: task 0,3,6 = PAID-FD CIFAR-10                      → RUN
+#           task 1,2,4,5,7,8 = Fixed-eps-3 + CSRA CIFAR-10    → SKIP
+# Phase 4: task  0-8  = Fair Fixed-ε + privacy-utility curve  → SKIP
+#           task 9-11 = expH BLUE validation PAID-FD           → RUN
+PAID_FD_TASKS: dict[int, "set[int] | None"] = {
+    1: set(range(12, 33)),
+    2: {0, 3, 6},
+    3: None,           # all 12 tasks are PAID-FD
+    4: {9, 10, 11},
+    5: None,           # all 3 tasks are PAID-FD
+}
+
+# ── Phase 0: main γ sweep (v10.1 equivalent, N=50, α=0.5) ──────────────────
+# γ={3,5,7,10} × seed={42,123,456} = 12 PAID-FD runs
+# These feed Fig 4/5/8/9/11 and Table IV (PAID-FD row).
+PHASE0_CONFIGS: list[dict] = []
+for _gamma in [3, 5, 7, 10]:
+    for _seed in [42, 123, 456]:
+        PHASE0_CONFIGS.append({
+            'label':  f'g{_gamma}_s{_seed}_v2',
+            'exp':    '0',
+            'method': 'PAID-FD',
+            'seed':   _seed,
+            'desc':   f'Main γ={_gamma} sweep (cubic-fix rerun)',
+            'config': {
+                'n_devices': 50,
+                'gamma': float(_gamma),
+                'alpha': 0.5,
+                'local_epochs': 5,
+                'local_lr': 0.01,
+                'local_momentum': 0.9,
+                'distill_epochs': 1,
+                'distill_lr': 0.001,
+                'temperature': 3.0,
+                'public_samples': 20000,
+                'synthetic': False,
+                'heterogeneity': {
+                    'config_file': 'config/devices/heterogeneity.yaml',
+                    'overrides': {'privacy_sensitivity': {'lambda_mult': 1.0}},
+                },
+                'method_config': {
+                    'delta': 0.01, 'clip_bound': 2.0, 'ema_momentum': 0.9,
+                    'distill_alpha': 0.7, 'temperature': 3.0,
+                    'pretrain_epochs': 10, 'pretrain_lr': 0.1,
+                    'use_blue': True, 'use_ema': True,
+                    'use_mixed_loss': True, 'use_ldp': True,
+                    'use_denoising': False,
+                },
+            },
+        })
+PHASE_SIZES[0] = len(PHASE0_CONFIGS)  # 12
+
 # ── progress / error log (written alongside results) ────────────────────────
 _SESSION_START = datetime.now().strftime("%Y%m%d_%H%M%S")
 PROGRESS_LOG = V2_OUTDIR / f"progress_{_SESSION_START}.log"
@@ -98,7 +153,7 @@ def _record_error(label: str, phase: int, task_id: int,
     _log(f"ERROR recorded → {ERROR_SUMMARY}", "error")
 
 # ── priority order for --all ───────────────────────────────────────────────
-ALL_PHASES_ORDERED = [1, 4, 3, 2, 5]
+ALL_PHASES_ORDERED = [0, 1, 4, 3, 2, 5]  # 0 = main γ sweep (highest priority)
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -128,6 +183,13 @@ def label_for(phase: int, task_id: int) -> str | None:
 
 def list_phase(phase: int) -> None:
     """Print task list for a phase."""
+    if phase == 0:
+        print(f"Phase 0: {len(PHASE0_CONFIGS)} experiments (main γ sweep, all PAID-FD)")
+        print("-" * 80)
+        for i, c in enumerate(PHASE0_CONFIGS):
+            print(f"  [{i:2d}] {c['label']:<35s}  seed={c['seed']}  {c['desc']}")
+        print("-" * 80)
+        return
     cmd = [sys.executable, str(RUNNER), "--phase", str(phase), "--list"]
     subprocess.run(cmd, cwd=str(ROOT))
 
@@ -138,6 +200,35 @@ def run_task(phase: int, task_id: int, device: str, rounds: int,
     Launch one task.  Returns True if the run completed (or was skipped),
     False if it failed.
     """
+    # Phase 0: use dedicated runner (no RUNNER/run_tmc_experiment.py needed)
+    if phase == 0:
+        spec = PHASE0_CONFIGS[task_id]
+        dest = V2_OUTDIR / f"{spec['label']}.json"
+        if dest.exists() and not dry:
+            _log(f"SKIP   Phase 0  Task {task_id:2d}  {spec['label']} — already done")
+            return True
+        tag = f"Phase 0  Task {task_id:2d}/{PHASE_SIZES[0]-1}"
+        if dry:
+            _log(f"{tag}  [DRY-RUN]  {spec['label']}")
+            return True
+        _log(f"START  {tag}  {spec['label']}")
+        t0 = time.time()
+        env = os.environ.copy()
+        env["TMC_V2_OUTDIR"] = str(V2_OUTDIR)
+        ret = subprocess.run(
+            [sys.executable, str(ROOT / "scripts" / "run_phase0_task.py"),
+             "--task-id", str(task_id), "--device", device,
+             "--rounds", str(rounds)],
+            cwd=str(ROOT), env=env,
+        )
+        elapsed = time.time() - t0
+        if ret.returncode == 0:
+            _log(f"DONE   {tag}  ({elapsed/60:.1f} min)")
+            return True
+        else:
+            _record_error(spec["label"], phase, task_id, ret.returncode)
+            return False
+
     # Build base command
     cmd = [
         sys.executable, str(RUNNER),
@@ -245,7 +336,17 @@ def run_phase(phase: int, device: str, rounds: int,
     n = PHASE_SIZES[phase]
     V2_OUTDIR.mkdir(parents=True, exist_ok=True)
 
-    tasks = [task_id] if task_id is not None else list(range(start_task, n))
+    paid_fd_only = PAID_FD_TASKS.get(phase)
+    if task_id is not None:
+        tasks = [task_id]
+    elif paid_fd_only is not None:
+        tasks = sorted(t for t in paid_fd_only if t >= start_task)
+        skipped_non_paidfd = n - len(tasks)
+        if skipped_non_paidfd > 0:
+            _log(f"Phase {phase}: auto-skipping {skipped_non_paidfd} non-PAID-FD tasks "
+                 "(Fixed-eps/CSRA/FedAvg — results reused from tmc/)")
+    else:
+        tasks = list(range(start_task, n))
 
     total = len(tasks)
     done = 0
@@ -335,8 +436,8 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
-    parser.add_argument("--phase", type=int, choices=[1, 2, 3, 4, 5],
-                        help="Run a specific phase (1–5)")
+    parser.add_argument("--phase", type=int, choices=[0, 1, 2, 3, 4, 5],
+                        help="Run a specific phase (0=main γ sweep, 1–5)")
     parser.add_argument("--task-id", type=int, default=None,
                         help="Run a single task within --phase")
     parser.add_argument("--start-task", type=int, default=0,
