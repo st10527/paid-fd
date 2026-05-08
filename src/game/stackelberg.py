@@ -106,9 +106,8 @@ class DeviceBestResponse:
             return self._non_participation(device_id)
         
         # Step 1: Solve cubic equation for ε*
-        # NOTE: The cubic uses raw (p, λ) rather than (p/c, λ/c).
-        # This is a modelling simplification where the ε-optimal condition
-        # is decoupled from c.  The s* formula then uses c correctly.
+        # Correct FOC-derived cubic: λε³ + λε² + (c-p)ε + c = 0
+        # Both the ε-optimal condition and s* formula depend on c.
         # When two positive roots exist, we select the one maximizing utility.
         eps_star = self._solve_cubic_bisection(p, lambda_i, c)
         
@@ -151,35 +150,33 @@ class DeviceBestResponse:
     ) -> Optional[float]:
         """
         Solve cubic equation for optimal ε*:
-        
-        f(ε) = λε³ + λε² + (1-p)ε + 1 = 0
-        
-        This uses the simplified formulation where c is decoupled from the
-        ε-optimal condition (c only appears in the s* formula).  The full
-        FOC-derived cubic would be (λ/c)ε³ + (λ/c)ε² + (1-p/c)ε + 1 = 0,
-        but with typical c ≈ 0.1-0.4 this produces ε* < 0.1 (impractical
-        for LDP).  The simplified form yields ε* ≈ 2-8 which provides
-        workable SNR for federated distillation.
-        
-        For p > 1, the cubic can have TWO positive roots. The smaller root
+
+        Derived from FOC ∂U/∂s = 0 and ∂U/∂ε = 0 where
+            U_i(s, ε) = p·log(1 + s·ε/(1+ε)) - c·s - λ·ε
+
+        Substituting s*(ε) = p/c - (1+ε)/ε into ∂U/∂ε = 0 and simplifying:
+
+            f(ε) = λε³ + λε² + (c - p)ε + c = 0
+
+        For p > c, the cubic can have TWO positive roots. The smaller root
         is a local minimum of device utility (saddle point of FOC), while
         the larger root is the global maximum. We find ALL positive roots
         and return the one that maximizes device utility.
-        
+
         Returns:
             Positive root ε* that maximizes utility, or None if not found
         """
         def f(eps):
-            return lambda_i * eps**3 + lambda_i * eps**2 + (1 - p) * eps + 1
-        
+            return lambda_i * eps**3 + lambda_i * eps**2 + (c - p) * eps + c
+
         # Use numpy to find all roots of the cubic analytically
-        # Coefficients: λε³ + λε² + (1-p)ε + 1 = 0
-        coeffs = [lambda_i, lambda_i, (1 - p), 1]
+        # Coefficients: λε³ + λε² + (c-p)ε + c = 0
+        coeffs = [lambda_i, lambda_i, (c - p), c]
         
         try:
             all_roots = np.roots(coeffs)
         except Exception:
-            return self._solve_cubic_bisection_fallback(p, lambda_i)
+            return self._solve_cubic_bisection_fallback(p, lambda_i, c)
         
         # Filter for real, positive roots
         positive_roots = []
@@ -218,16 +215,19 @@ class DeviceBestResponse:
     def _solve_cubic_bisection_fallback(
         self,
         p: float,
-        lambda_i: float
+        lambda_i: float,
+        c: float = 1.0
     ) -> Optional[float]:
         """
         Fallback bisection solver: finds the LARGEST positive root.
-        
+
+        Uses the correct cubic: f(ε) = λε³ + λε² + (c-p)ε + c = 0
+
         Strategy: scan from a large upper bound downward to find where
         f transitions from positive to negative (the larger root).
         """
         def f(eps):
-            return lambda_i * eps**3 + lambda_i * eps**2 + (1 - p) * eps + 1
+            return lambda_i * eps**3 + lambda_i * eps**2 + (c - p) * eps + c
         
         # For the cubic with positive leading coefficient,
         # f(ε) → +∞ as ε → +∞. Between the two roots, f < 0.

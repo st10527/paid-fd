@@ -25,6 +25,7 @@ Usage:
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import os
 import argparse
 import json
 import time
@@ -38,7 +39,7 @@ from scripts.run_all_experiments import run_single_experiment, save_json
 # ============================================================
 # Output directory
 # ============================================================
-OUTDIR = "results/experiments/tmc"
+OUTDIR = os.environ.get("TMC_V2_OUTDIR", "results/experiments/tmc")
 
 
 # ============================================================
