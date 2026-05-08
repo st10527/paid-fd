@@ -47,6 +47,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -62,6 +63,39 @@ LOG_DIR = ROOT / "results" / "logs"
 
 # ── phase sizes (must match run_tmc_experiment.py) ─────────────────────────
 PHASE_SIZES = {1: 33, 2: 9, 3: 12, 4: 12, 5: 3}
+
+# ── progress / error log (written alongside results) ────────────────────────
+_SESSION_START = datetime.now().strftime("%Y%m%d_%H%M%S")
+PROGRESS_LOG = V2_OUTDIR / f"progress_{_SESSION_START}.log"
+ERROR_SUMMARY = V2_OUTDIR / "ERRORS.txt"
+
+
+def _setup_logging() -> None:
+    """Mirror all stdout to PROGRESS_LOG so `tail -f` works on remote."""
+    V2_OUTDIR.mkdir(parents=True, exist_ok=True)
+    fmt = "%(asctime)s  %(levelname)-7s  %(message)s"
+    logging.basicConfig(
+        level=logging.INFO,
+        format=fmt,
+        handlers=[
+            logging.StreamHandler(sys.stdout),
+            logging.FileHandler(str(PROGRESS_LOG), mode="a", encoding="utf-8"),
+        ],
+    )
+
+
+def _log(msg: str, level: str = "info") -> None:
+    getattr(logging, level)(msg)
+
+
+def _record_error(label: str, phase: int, task_id: int,
+                  returncode: int) -> None:
+    """Append a one-liner to ERRORS.txt for instant grep-ability."""
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    line = f"[{ts}] FAILED  phase={phase}  task={task_id:2d}  label={label}  rc={returncode}\n"
+    with open(str(ERROR_SUMMARY), "a") as f:
+        f.write(line)
+    _log(f"ERROR recorded → {ERROR_SUMMARY}", "error")
 
 # ── priority order for --all ───────────────────────────────────────────────
 ALL_PHASES_ORDERED = [1, 4, 3, 2, 5]
@@ -121,13 +155,11 @@ def run_task(phase: int, task_id: int, device: str, rounds: int,
     env = os.environ.copy()
     env["TMC_V2_OUTDIR"] = str(V2_OUTDIR)
 
-    print(f"\n{'─'*68}")
-    print(f"  Phase {phase}  Task {task_id:2d}/{PHASE_SIZES[phase]-1}",
-          end="")
+    tag = f"Phase {phase}  Task {task_id:2d}/{PHASE_SIZES[phase]-1}"
     if dry:
-        print("  [DRY-RUN]")
+        _log(f"{tag}  [DRY-RUN]  cmd: {' '.join(cmd)}")
     else:
-        print()
+        _log(f"START  {tag}")
 
     t0 = time.time()
     ret = subprocess.run(cmd, cwd=str(ROOT), env=env)
@@ -135,10 +167,11 @@ def run_task(phase: int, task_id: int, device: str, rounds: int,
 
     if ret.returncode == 0:
         if not dry:
-            print(f"  ✓ completed in {elapsed/60:.1f} min")
+            _log(f"DONE   {tag}  ({elapsed/60:.1f} min)")
         return True
     else:
-        print(f"  ✗ FAILED (code {ret.returncode})")
+        lbl = label_for(phase, task_id) or "unknown"
+        _record_error(lbl, phase, task_id, ret.returncode)
         return False
 
 
@@ -219,10 +252,9 @@ def run_phase(phase: int, device: str, rounds: int,
     failed: list[int] = []
     skipped = 0
 
-    print(f"\n{'═'*68}")
-    print(f"  Phase {phase} — {n} total tasks, running {total}")
-    print(f"  Output dir: {V2_OUTDIR}")
-    print(f"{'═'*68}")
+    _log(f"═" * 60)
+    _log(f"Phase {phase} — {n} total tasks, running {total}")
+    _log(f"Output dir: {V2_OUTDIR}")
 
     for tid in tasks:
         # Probe label to check if already complete
@@ -230,7 +262,7 @@ def run_phase(phase: int, device: str, rounds: int,
         if lbl is not None:
             dest = V2_OUTDIR / f"{lbl}.json"
             if dest.exists() and not dry:
-                print(f"  [skip] {lbl} — already done")
+                _log(f"SKIP   Phase {phase}  Task {tid:2d}  {lbl} — already done")
                 skipped += 1
                 continue
 
@@ -240,12 +272,11 @@ def run_phase(phase: int, device: str, rounds: int,
         else:
             failed.append(tid)
 
-    print(f"\n{'═'*68}")
-    print(f"  Phase {phase} complete — done={done}  skipped={skipped}  "
-          f"failed={len(failed)}")
+    _log(f"Phase {phase} FINISHED — done={done}  skipped={skipped}  failed={len(failed)}")
     if failed:
-        print(f"  Failed task-ids: {failed}")
-    print(f"{'═'*68}")
+        _log(f"Failed task-ids for phase {phase}: {failed}", "warning")
+        _log(f"Retry:  python scripts/run_v2_experiments.py "
+             f"--phase {phase} --task-id <ID> --device cuda", "warning")
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -331,13 +362,18 @@ def main() -> None:
         print(f"ERROR: runner not found: {RUNNER}")
         sys.exit(1)
 
+    # ── logging setup (must be first) ──────────────────────────────────────
+    _setup_logging()
+
     # ── print header ────────────────────────────────────────────────────────
-    print("=" * 68)
-    print("  PAID-FD v2 Batch Experiment Launcher")
-    print(f"  cubic fix: coeffs = [lam, lam, c-p, c]  (was [lam, lam, 1-p, 1])")
-    print(f"  output   : {V2_OUTDIR}")
-    print(f"  device   : {args.device}   rounds: {args.rounds}")
-    print("=" * 68)
+    _log("=" * 60)
+    _log("PAID-FD v2 Batch Experiment Launcher")
+    _log("cubic fix: coeffs = [lam, lam, c-p, c]  (was [lam, lam, 1-p, 1])")
+    _log(f"output   : {V2_OUTDIR}")
+    _log(f"log file : {PROGRESS_LOG}")
+    _log(f"errors   : {ERROR_SUMMARY}  (appended on each failure)")
+    _log(f"device   : {args.device}   rounds: {args.rounds}")
+    _log("=" * 60)
 
     # ── auto-patch OUTDIR ───────────────────────────────────────────────────
     if not args.no_patch:
