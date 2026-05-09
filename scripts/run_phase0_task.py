@@ -24,7 +24,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from run_v2_experiments import PHASE0_CONFIGS  # noqa: E402
 
 # Import experiment runner
-from experiments.run_experiment import run_single_experiment  # noqa: E402
+from scripts.run_all_experiments import run_single_experiment  # noqa: E402
 
 
 def save_json(obj, path):
