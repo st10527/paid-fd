@@ -62,7 +62,7 @@ V2_OUTDIR = ROOT / "results" / "experiments" / "tmc_v2"
 LOG_DIR = ROOT / "results" / "logs"
 
 # ── phase sizes (must match run_tmc_experiment.py) ─────────────────────────
-PHASE_SIZES = {1: 33, 2: 9, 3: 12, 4: 12, 5: 3}
+PHASE_SIZES = {1: 33, 2: 9, 3: 9, 4: 12, 5: 3, 6: 6}
 
 # ── which task-ids in each phase are PAID-FD (use cubic solver) ─────────────
 # Phase 1: task  0-11 = Fixed-eps-1/3, CSRA, FedAvg/MD/GMKD  → SKIP (reuse tmc/)
@@ -71,12 +71,14 @@ PHASE_SIZES = {1: 33, 2: 9, 3: 12, 4: 12, 5: 3}
 #           task 1,2,4,5,7,8 = Fixed-eps-3 + CSRA CIFAR-10    → SKIP
 # Phase 4: task  0-8  = Fair Fixed-ε + privacy-utility curve  → SKIP
 #           task 9-11 = expH BLUE validation PAID-FD           → RUN
+# Phase 6: all 6 tasks are PAID-FD (λ_mult robustness)
 PAID_FD_TASKS: dict[int, "set[int] | None"] = {
     1: set(range(12, 33)),
     2: {0, 3, 6},
-    3: None,           # all 12 tasks are PAID-FD
+    3: None,           # all 9 tasks are PAID-FD
     4: {9, 10, 11},
     5: None,           # all 3 tasks are PAID-FD
+    6: None,           # all 6 tasks are PAID-FD
 }
 
 # ── Phase 0: main γ sweep (v10.1 equivalent, N=50, α=0.5) ──────────────────
@@ -153,7 +155,7 @@ def _record_error(label: str, phase: int, task_id: int,
     _log(f"ERROR recorded → {ERROR_SUMMARY}", "error")
 
 # ── priority order for --all ───────────────────────────────────────────────
-ALL_PHASES_ORDERED = [0, 1, 4, 3, 2, 5]  # 0 = main γ sweep (highest priority)
+ALL_PHASES_ORDERED = [0, 1, 4, 3, 2, 5, 6]  # 6 = λ_mult robustness (new)
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -436,8 +438,8 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
-    parser.add_argument("--phase", type=int, choices=[0, 1, 2, 3, 4, 5],
-                        help="Run a specific phase (0=main γ sweep, 1–5)")
+    parser.add_argument("--phase", type=int, choices=[0, 1, 2, 3, 4, 5, 6],
+                        help="Run a specific phase (0=main γ sweep, 1–6)")
     parser.add_argument("--task-id", type=int, default=None,
                         help="Run a single task within --phase")
     parser.add_argument("--start-task", type=int, default=0,

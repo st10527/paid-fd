@@ -107,11 +107,11 @@ FedMD, Fixed-ε variants) do NOT need re-running as they don't use the Stackelbe
 | **Full PAID-FD** | 61.43 ± 0.39 | ⏳ | — | Game solver affected |
 | w/o Mixed Loss (CE anchor) | 15.75 ± 0.73 | ⏳ | — | Likely unchanged (catastrophic forgetting, unrelated to solver) |
 | w/o Persistent local | 64.02 ± 0.18 | ⏳ | — | Game solver affected |
-| w/o BLUE | ⏳ | ⏳ | — | Game solver affected |
-| w/o KL temperature | ⏳ | ⏳ | — | Game solver affected |
+| w/o BLUE | ⏳ | ⏳ | — | Phase 1 expC_noblue ×3 seeds |
+| w/o KL temperature (T=1) | ⏳ | ⏳ | — | Phase 5 expI_noKLtemp |
 
-> **Note**: expI files cover noEMA, noMixedLoss, noPersistent.
-> Need to add expI_noBLUE and expI_noKL experiments.
+> **Note**: EMA variant removed from ablation per paper revision.
+> expI covers: noKLtemp, noMixedLoss, noPersistent.
 
 ---
 
@@ -128,33 +128,22 @@ FedMD, Fixed-ε variants) do NOT need re-running as they don't use the Stackelbe
 | 80 | 3 | ~60.8 | ⏳ |
 | 80 | 10 | ~61.2 | ⏳ |
 
-### (b) Non-IID heterogeneity: α ∈ {0.1, 0.5, 1.0}
+### (b) Non-IID heterogeneity: α ∈ {0.1, 0.5, 1.0, 5.0}  (γ=5 fixed)
 
-| α | γ | Old Acc (%) | New Acc (%) |
-|---|---|-------------|-------------|
-| 0.1 | 3 | ⏳ | ⏳ |
-| 0.1 | 10 | ⏳ | ⏳ |
-| 0.5 | 3 | 61.22 | ⏳ |
-| 0.5 | 10 | 61.36 | ⏳ |
-| 1.0 | 3 | ⏳ | ⏳ |
-| 1.0 | 10 | ⏳ | ⏳ |
+| α | Old Acc (%) | New Acc (%) |
+|---|-------------|-------------|
+| 0.1 | ⏳ | ⏳ (Phase 3 expE_a01_g5 ×3 seeds) |
+| 0.5 | 61.38 | ⏳ (Phase 0 γ=5, baseline) |
+| 1.0 | ⏳ | ⏳ (Phase 3 expE_a10_g5 ×3 seeds) |
+| 5.0 | ⏳ | ⏳ (Phase 3 expE_a50_g5 ×3 seeds) |
 
-### (c) Privacy preference: λ_mult ∈ {0.5, 1.0, 2.0}
+### (c) Privacy preference: λ_mult ∈ {0.5, 1.0, 2.0}  (γ=5 fixed)
 
-| λ_mult | γ | Old Acc (%) | New Acc (%) |
-|--------|---|-------------|-------------|
-| 0.5 | 3 | 60.92 | ⏳ |
-| 0.5 | 5 | 60.86 | ⏳ |
-| 0.5 | 7 | 61.42 | ⏳ |
-| 0.5 | 10 | 61.00 | ⏳ |
-| 1.0 | 3 | 61.22 | ⏳ |
-| 1.0 | 5 | 61.38 | ⏳ |
-| 1.0 | 7 | 61.33 | ⏳ |
-| 1.0 | 10 | 61.36 | ⏳ |
-| 2.0 | 3 | 60.96 | ⏳ |
-| 2.0 | 5 | 61.15 | ⏳ |
-| 2.0 | 7 | 61.11 | ⏳ |
-| 2.0 | 10 | 61.32 | ⏳ |
+| λ_mult | Old Acc (%) | New Acc (%) |
+|--------|-------------|-------------|
+| 0.5 | ⏳ | ⏳ (Phase 6 expJ_lammult0p5 ×3 seeds) |
+| 1.0 | 61.38 | ⏳ (Phase 0 γ=5, baseline) |
+| 2.0 | ⏳ | ⏳ (Phase 6 expJ_lammult2p0 ×3 seeds) |
 
 ---
 
@@ -211,19 +200,21 @@ FedMD, Fixed-ε variants) do NOT need re-running as they don't use the Stackelbe
 
 Each run ≈ 2.5–3 h on RTX 5070 Ti. Total PAID-FD runs needed:
 
-| Section | Runs | Est. time |
-|---------|------|-----------|
-| VI-B/C: γ ∈ {3,5,7,10} × 3 seeds | 12 | 30–36 h |
-| VI-D: method comparison | 4 (PAID-FD only) | 10–12 h |
-| VI-F: ablation (4 variants × 3 seeds) | 12 | 30–36 h |
-| VI-G (a): scalability N={20,80} × 2γ × 3s | 12 | 30–36 h |
-| VI-G (b): α sweep × 2γ × 3s | 12 | 30–36 h |
-| VI-G (c): λ_mult × 4γ | 12 | 30–36 h |
-| VI-I: CIFAR-10 × 3 seeds | 3 | 8–10 h |
-| **Total** | **67 runs** | **~7–8 days** |
+| Section | Runs | Phase | Est. time |
+|---------|------|-------|-----------|
+| Phase 0 — VI-B/C: γ∈{3,5,7,10} × 3 seeds | 12 | 0 | 33 h |
+| Phase 1 — expB N={20,80} scalability + expC ablation | 21 | 1 | 51 h |
+| Phase 4 — expH BLUE validation | 3 | 4 | 8 h |
+| Phase 3 — VI-G(b) α∈{0.1,1.0,5.0} × γ=5 × 3 seeds | 9 | 3 | 25 h |
+| Phase 2 — VI-I CIFAR-10 × 3 seeds | 3 | 2 | 8 h |
+| Phase 5 — VI-F pipeline ablation (noKLtemp/noMixed/noPersist) | 3 | 5 | 8 h |
+| Phase 6 — VI-G(c) λ_mult∈{0.5,2.0} × 3 seeds | 6 | 6 | 17 h |
+| **Total** | **57 new runs** | | **~150 h ≈ 6.3 days** |
 
-Use `scripts/run_v2_experiments.py` with `--phase` flags to run in batches.  
-Priority order: VI-B/C → VI-D → VI-F → VI-G → VI-I
+> + 1 already done: `expB_n20_g3_s42` → **56 remaining**
+
+Use `scripts/run_v2_experiments.py --all` to run all phases in priority order.  
+Or per-phase: `--phase 0` → `--phase 1` → `--phase 4` → `--phase 3` → `--phase 2` → `--phase 5` → `--phase 6`
 
 ---
 

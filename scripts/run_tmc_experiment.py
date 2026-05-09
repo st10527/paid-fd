@@ -298,24 +298,28 @@ def build_phase2():
 # ============================================================
 
 def build_phase3():
-    """12 runs for Week 3 — Dirichlet α sweep."""
+    """9 runs — VI-G(b) heterogeneity sweep: α∈{0.1,1.0,5.0} × γ=5 × 3 seeds.
+
+    γ=5, α=0.5 baseline already covered by Phase 0.  This phase adds the
+    three non-baseline α values at γ=5 (fixed) so the robustness figure
+    (Fig 8b) can show accuracy vs. data heterogeneity with γ held constant.
+    """
     configs = []
 
-    for alpha in [0.1, 1.0]:
-        for gamma in [3, 10]:
-            for seed in [42, 123, 456]:
-                mc = {**PAID_FD_METHOD, 'gamma': gamma}
-                configs.append({
-                    'label': 'expE_a%s_g%d_s%d' % (
-                        str(alpha).replace('.', ''), gamma, seed),
-                    'exp': 'E', 'method': 'PAID-FD',
-                    'seed': seed,
-                    'config': make_training_config(
-                        gamma=gamma, alpha=alpha, method_config=mc),
-                    'desc': 'PAID-FD α=%.1f γ=%d' % (alpha, gamma),
-                })
+    for alpha in [0.1, 1.0, 5.0]:
+        for seed in [42, 123, 456]:
+            mc = {**PAID_FD_METHOD, 'gamma': 5}
+            configs.append({
+                'label': 'expE_a%s_g5_s%d' % (
+                    str(alpha).replace('.', ''), seed),
+                'exp': 'E', 'method': 'PAID-FD',
+                'seed': seed,
+                'config': make_training_config(
+                    gamma=5, alpha=alpha, method_config=mc),
+                'desc': 'PAID-FD α=%.1f γ=5 (heterogeneity sweep)' % alpha,
+            })
 
-    assert len(configs) == 12, "Phase 3 should have 12 configs, got %d" % len(configs)
+    assert len(configs) == 9, "Phase 3 should have 9 configs, got %d" % len(configs)
     return configs
 
 
@@ -423,15 +427,15 @@ def build_phase5(seed: int = 42):
     configs = []
     s = seed
 
-    # Ablation 1: No EMA (single-round logits, no cross-round averaging)
+    # Ablation 1: No KL temperature (T=1, hard logits — no softening)
     mc = dict(PAID_FD_METHOD)
-    mc['use_ema'] = False
+    mc['temperature'] = 1.0
     configs.append({
-        'label': 'expI_noEMA_s%d' % s,
+        'label': 'expI_noKLtemp_s%d' % s,
         'exp': 'I',
         'method': 'PAID-FD',
         'seed': s,
-        'desc': 'No EMA (single-round logits)',
+        'desc': 'No KL temperature (T=1, hard logits)',
         'config': make_training_config(gamma=5.0, method_config=mc),
     })
 
@@ -463,6 +467,38 @@ def build_phase5(seed: int = 42):
 
 
 # ============================================================
+# PHASE 6: VI-G(c) Privacy-preference robustness (6 runs)
+# λ_mult ∈ {0.5, 2.0} × γ=5 × 3 seeds
+# λ_mult=1.0 (baseline) already covered by Phase 0 γ=5 runs.
+# ============================================================
+
+def build_phase6():
+    """6 runs — VI-G(c) λ_mult robustness: {0.5, 2.0} × 3 seeds.
+
+    λ_mult scales all λ_i values from heterogeneity.yaml.  Together with
+    Phase 0 γ=5 (λ_mult=1.0 baseline) this gives three points for the
+    privacy-preference robustness panel.
+    """
+    configs = []
+
+    for lm in [0.5, 2.0]:
+        for seed in [42, 123, 456]:
+            mc = {**PAID_FD_METHOD, 'gamma': 5}
+            lm_label = str(lm).replace('.', 'p')
+            configs.append({
+                'label': 'expJ_lammult%s_s%d' % (lm_label, seed),
+                'exp': 'J', 'method': 'PAID-FD',
+                'seed': seed,
+                'config': make_training_config(
+                    gamma=5, lambda_mult=lm, method_config=mc),
+                'desc': 'PAID-FD λ_mult=%.1f (privacy-pref robustness)' % lm,
+            })
+
+    assert len(configs) == 6, "Phase 6 should have 6 configs, got %d" % len(configs)
+    return configs
+
+
+# ============================================================
 # All phases
 # ============================================================
 ALL_PHASES = {
@@ -471,6 +507,7 @@ ALL_PHASES = {
     3: build_phase3,
     4: build_phase4,
     5: build_phase5,   # accepts optional seed= kwarg
+    6: build_phase6,
 }
 
 
@@ -523,7 +560,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="TMC Paper — Master Experiment Runner")
     parser.add_argument("--phase", type=int, required=True,
-                        choices=[1, 2, 3, 4, 5], help="Phase number")
+                        choices=[1, 2, 3, 4, 5, 6], help="Phase number")
     parser.add_argument("--task-id", type=int, default=None,
                         help="Task ID (0-indexed) for SLURM array")
     parser.add_argument("--list", action="store_true",
