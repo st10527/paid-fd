@@ -36,14 +36,13 @@ FedMD, Fixed-ε variants) do NOT need re-running as they don't use the Stackelbe
 
 | γ | ε* (old cubic) | ε* (new cubic) | Δ |
 |---|----------------|----------------|---|
-| 3  | 2.77 ± 0.05 | ⏳ TBD | — |
-| 5  | 2.84 ± 0.06 | ⏳ TBD | — |
-| 7  | 2.90 ± 0.05 | ⏳ TBD | — |
-| 10 | 3.09 ± 0.07 | ⏳ TBD | — |
+| 3  | 2.77 ± 0.05 | **2.197** | −0.57 |
+| 5  | 2.84 ± 0.06 | **2.365** | −0.47 |
+| 7  | 2.90 ± 0.05 | **2.710** | −0.19 |
+| 10 | 3.09 ± 0.07 | **3.152** | +0.06 |
 
-> Qualitative prediction: monotonicity Prop.2 (ε* increases with γ) should still hold.
-> Magnitude will shift up uniformly by ~+0.9 (γ=5 reference).
-> **Figure 3 will need regeneration after rerun.**
+> ✅ Monotonicity Prop.2 still holds: 2.197 → 2.365 → 2.710 → 3.152
+> ⚠️ Direction opposite to prediction: ε\* went DOWN at low γ (old code used c=1, overestimating cost → artificially high ε\*). Fix uses real c∈[0.1,0.4].
 
 ---
 
@@ -51,22 +50,22 @@ FedMD, Fixed-ε variants) do NOT need re-running as they don't use the Stackelbe
 
 **Setup**: N=50, α=0.5, T=100, seeds=[42, 123, 456]
 
-| γ | Acc (old) | Acc (new) | Participation (old) | Participation (new) | Max Cum ε (old) | Total Payment (old) |
+| γ | Acc (old) | Acc (new) | Participation (old) | Participation (new) | Max Cum ε (new) | Total Payment (new) |
 |---|-----------|-----------|---------------------|---------------------|-----------------|---------------------|
-| 3  | 61.22 ± 0.18% | ⏳ | 38% | ⏳ | ~500 | ⏳ |
-| 5  | 61.38 ± 0.32% | ⏳ | 82% | ⏳ | ~740 | ⏳ |
-| 7  | 61.33 ± 0.28% | ⏳ | ~90% | ⏳ | ~800 | ⏳ |
-| 10 | 61.36 ± 0.25% | ⏳ | 100% | ⏳ | ~870 | ⏳ |
+| 3  | 61.22 ± 0.18% | **61.43 ± 0.58%** | 38% | **88%** | **598** | **12,604** |
+| 5  | 61.38 ± 0.32% | **61.37 ± 0.25%** | 82% | **99%** | **678** | **19,428** |
+| 7  | 61.33 ± 0.28% | **61.29 ± 0.30%** | ~90% | **100%** | **770** | **27,780** |
+| 10 | 61.36 ± 0.25% | **61.30 ± 0.23%** | 100% | **100%** | **880** | **39,884** |
 
-**Spread analysis (old)**:
-- Accuracy spread: 0.23 pp (61.22–61.38%)  
-- Participation: 38% → 100% (**2.63×**)
-- Max cum ε exposure: **1.75×** (γ=3 to γ=10)
-- Total payment: **6.35×** (γ=3 to γ=10)
+**Spread analysis (new vs old)**:
+- Accuracy spread: **0.14 pp** (was 0.23 pp — even flatter ✅)
+- Participation: 88% → 100% (**1.14×**, was 2.63×)
+- Max cum ε exposure: **1.47×** (598→880, was 1.75×)
+- Total payment: **3.16×** (12,604→39,884, was 6.35×)
 
-> **Prediction for new cubic**: accuracy may increase slightly (higher SNR).
-> Participation rates could change since equilibrium s* shifts. Payment likely higher.
-> Frontier ratios (2.63×, 1.75×, 6.35×) are the key paper claims — watch these.
+> ⚠️ **MAJOR CHANGE**: All three frontier ratio claims (2.63×, 1.75×, 6.35×) need updating in paper.
+> Cubic fix makes low-γ devices find participation more profitable → γ=3 participation jumped 38%→88%,
+> compressing the spread. Qualitative conclusion (higher γ = more participation/payment/privacy-cost) still holds.
 
 ---
 
@@ -76,7 +75,7 @@ FedMD, Fixed-ε variants) do NOT need re-running as they don't use the Stackelbe
 
 | Method | Old Acc (%) | New Acc (%) | Δ (pp) | Notes |
 |--------|-------------|-------------|--------|-------|
-| **PAID-FD (γ=5)** | 61.43 ± 0.39 | ⏳ TBD | — | Rerun needed |
+| **PAID-FD (γ=5)** | 61.43 ± 0.39 | **61.37 ± 0.25** | −0.06 | ✅ Phase 0 done |
 | Fair Fixed-ε=1 | 61.32 | 61.32 | 0 | No solver, unchanged |
 | Fair Fixed-ε=3 | 61.21 | 61.21 | 0 | No solver, unchanged |
 | Fair Fixed-ε=5 | 61.10 | 61.10 | 0 | No solver, unchanged |
@@ -172,27 +171,27 @@ FedMD, Fixed-ε variants) do NOT need re-running as they don't use the Stackelbe
 
 ## Summary: Impact of Cubic Fix
 
-| Claim | Old value | Predicted new | Action needed |
-|-------|-----------|--------------|---------------|
-| ε* monotone in γ | ✅ 2.77→3.09 | ✅ still monotone (higher) | Re-run + regen Fig 3 |
-| Accuracy ≈61.4% (plateau) | 61.43 ± 0.32 | ~61.5–62.0% (est.) | Re-run + update Table 4 |
-| Participation 38→100% | 2.63× | Possible change | Re-run + update Fig 4b |
-| ε exposure 1.75× spread | γ=3→10 | Likely similar shape | Re-run + update Fig 4c |
-| Payment 6.35× spread | γ=3→10 | Likely larger | Re-run + update Fig 4d |
-| PAID-FD > Fair Fixed-ε=1 | +0.11 pp | May increase | Re-run |
-| w/o Mixed Loss catastrophic | −45.7 pp | Unchanged | No re-run needed |
-| Fig 7 operating point | ε̄*=2.84 | ε̄*≈3.3 | Rerun expG-equivalent |
+| Claim | Old value | **New value (actual)** | Status |
+|-------|-----------|------------------------|--------|
+| ε\* monotone in γ | ✅ 2.77→3.09 | ✅ **2.197→3.152** | ✅ Confirmed |
+| Accuracy ≈61.4% (plateau) | 61.43 ± 0.32 | **61.37 ± 0.25%** (γ=5) | ✅ Unchanged |
+| Participation ratio 2.63× | 38→100% | **1.14×** (88→100%) | ⚠️ Paper needs update |
+| ε exposure spread 1.75× | γ=3→10 | **1.47×** (598→880) | ⚠️ Paper needs update |
+| Payment spread 6.35× | γ=3→10 | **3.16×** (12,604→39,884) | ⚠️ Paper needs update |
+| PAID-FD > Fair Fixed-ε=1 | +0.11 pp | **+0.05 pp** (61.37 vs 61.32) | ✅ Still holds |
+| w/o Mixed Loss catastrophic | ~35% best | ⏳ Phase 5 | ⏳ |
+| ε̄\* operating point | ε̄\*=2.84 | **ε̄\*=2.365** (γ=5) | ⚠️ Fig 7 shift |
 
-### ⚠️ Qualitative conclusions at risk
-1. **Fig 4b participation ratio 2.63×** — may change if s* shifts dramatically
-2. **Fig 7 operating point** — will shift from ε̄*=2.84 to ~3.3; still in plateau ✅
-3. **Table 4 PAID-FD advantage** — may shrink or grow vs Fixed-ε baselines
+### ⚠️ Paper updates required (from Phase 0)
+1. **Fig 4b/4c/4d ratio labels** — 2.63×→1.14×, 1.75×→1.47×, 6.35×→3.16×
+2. **VI-B ε\* table** — all values updated (lower than old at γ≤7)
+3. **Fig 7 operating point** — ε̄\*=2.84→2.365; still in accuracy plateau ✅
 
-### ✅ Qualitative conclusions that will NOT change
-- Catastrophic forgetting without Mixed Loss (w/o CE anchor)
-- Non-private baselines (FedAvg, FedGMKD, FedMD) accuracy unchanged
-- Fixed-ε baselines accuracy unchanged
-- Monotonicity of ε* with γ (Prop. 2)
+### ✅ Qualitative conclusions confirmed unchanged
+- Monotonicity of ε\* with γ (Prop. 2) ✅
+- Accuracy plateau (~61.4%) across all γ ✅
+- PAID-FD > Fair Fixed-ε advantage (still positive) ✅
+- Non-private / Fixed-ε baselines unaffected ✅
 
 ---
 
@@ -200,15 +199,15 @@ FedMD, Fixed-ε variants) do NOT need re-running as they don't use the Stackelbe
 
 Each run ≈ 2.5–3 h on RTX 5070 Ti. Total PAID-FD runs needed:
 
-| Section | Runs | Phase | Est. time |
-|---------|------|-------|-----------|
-| Phase 0 — VI-B/C: γ∈{3,5,7,10} × 3 seeds | 12 | 0 | 33 h |
-| Phase 1 — expB N={20,80} scalability + expC ablation | 21 | 1 | 51 h |
-| Phase 4 — expH BLUE validation | 3 | 4 | 8 h |
-| Phase 3 — VI-G(b) α∈{0.1,1.0,5.0} × γ=5 × 3 seeds | 9 | 3 | 25 h |
-| Phase 2 — VI-I CIFAR-10 × 3 seeds | 3 | 2 | 8 h |
-| Phase 5 — VI-F pipeline ablation (noKLtemp/noMixed/noPersist) | 3 | 5 | 8 h |
-| Phase 6 — VI-G(c) λ_mult∈{0.5,2.0} × 3 seeds | 6 | 6 | 17 h |
+| Section | Runs | Phase | Est. time | Status |
+|---------|------|-------|-----------|--------|
+| Phase 0 — VI-B/C: γ∈{3,5,7,10} × 3 seeds | 12 | 0 | 33 h | ✅ Done |
+| Phase 1 — expB N={20,80} scalability + expC ablation | 21 | 1 | 51 h | ⏳ Next |
+| Phase 4 — expH BLUE validation | 3 | 4 | 8 h | ⏳ |
+| Phase 3 — VI-G(b) α∈{0.1,1.0,5.0} × γ=5 × 3 seeds | 9 | 3 | 25 h | ⏳ |
+| Phase 2 — VI-I CIFAR-10 × 3 seeds | 3 | 2 | 8 h | ⏳ |
+| Phase 5 — VI-F pipeline ablation (noKLtemp/noMixed/noPersist) | 3 | 5 | 8 h | ⏳ |
+| Phase 6 — VI-G(c) λ_mult∈{0.5,2.0} × 3 seeds | 6 | 6 | 17 h | ⏳ |
 | **Total** | **57 new runs** | | **~150 h ≈ 6.3 days** |
 
 > + 1 already done: `expB_n20_g3_s42` → **56 remaining**
