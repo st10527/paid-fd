@@ -1,0 +1,12 @@
+[2026-05-09 07:59:31] FAILED  phase=0  task= 0  label=g3_s42_v2  rc=1
+[2026-05-09 07:59:32] FAILED  phase=0  task= 1  label=g3_s123_v2  rc=1
+[2026-05-09 07:59:33] FAILED  phase=0  task= 2  label=g3_s456_v2  rc=1
+[2026-05-09 07:59:34] FAILED  phase=0  task= 3  label=g5_s42_v2  rc=1
+[2026-05-09 07:59:35] FAILED  phase=0  task= 4  label=g5_s123_v2  rc=1
+[2026-05-09 07:59:36] FAILED  phase=0  task= 5  label=g5_s456_v2  rc=1
+[2026-05-09 07:59:38] FAILED  phase=0  task= 6  label=g7_s42_v2  rc=1
+[2026-05-09 07:59:39] FAILED  phase=0  task= 7  label=g7_s123_v2  rc=1
+[2026-05-09 07:59:40] FAILED  phase=0  task= 8  label=g7_s456_v2  rc=1
+[2026-05-09 07:59:41] FAILED  phase=0  task= 9  label=g10_s42_v2  rc=1
+[2026-05-09 07:59:42] FAILED  phase=0  task=10  label=g10_s123_v2  rc=1
+[2026-05-09 07:59:43] FAILED  phase=0  task=11  label=g10_s456_v2  rc=1
